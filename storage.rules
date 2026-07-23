@@ -1,0 +1,13 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Only allow access to the uploads path
+    match /uploads/{filename} {
+      // Only allow write (upload) — read requires a signed URL from server
+      // This prevents public listing/download of raw files.
+      // In production, replace `true` with auth check when auth is added.
+      allow write: if true;
+      allow read: if false; // Server generates signed URLs for downloads
+    }
+  }
+}
