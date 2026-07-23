@@ -1,5 +1,7 @@
 import fitz
 import os
+import tempfile
+from app.ml.ocr_service import extract_text_from_image
 
 def extract_text_from_pdf (pdf_path:str)->str:
     """
@@ -21,6 +23,18 @@ def extract_text_from_pdf (pdf_path:str)->str:
 
     for page_num, page in enumerate(doc,start=1):
         page_text=page.get_text("text")
+        
+        if not page_text.strip():
+            # Fallback to OCR for scanned pages
+            pix = page.get_pixmap(dpi=200)
+            img_path = os.path.join(tempfile.gettempdir(), f"page_{page_num}.png")
+            pix.save(img_path)
+            try:
+                page_text = extract_text_from_image(img_path)
+            finally:
+                if os.path.exists(img_path):
+                    os.remove(img_path)
+                    
         if page_text.strip():
             text+=f"\n--- Page {page_num} ---\n{page_text}"
     doc.close()
