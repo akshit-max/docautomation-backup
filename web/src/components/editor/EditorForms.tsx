@@ -79,9 +79,13 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
     const updated = [...(content.line_items || [])];
     updated[i] = { ...updated[i], [key]: val };
 
-    const hours = parseFloat(updated[i].hours || 0);
-    const unitPrice = parseFloat(updated[i].unit_price || 0);
-    updated[i].amount = hours * unitPrice;
+    if (key === "hours" || key === "unit_price") {
+      const h = updated[i].hours;
+      const u = updated[i].unit_price;
+      if (h !== undefined && h !== "" && u !== undefined && u !== "") {
+        updated[i].amount = (parseFloat(h) || 0) * (parseFloat(u) || 0);
+      }
+    }
 
     update("line_items", updated);
   };
@@ -98,17 +102,17 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
   return (
     <div style={f.wrap}>
       <SectionLabel>Receipt Info</SectionLabel>
-      <Field label="Receipt number" value={content.receipt_number} onChange={v => update("receipt_number", v)} />
-      <Field label="Date"           value={content.date}           onChange={v => update("date", v)} />
-      <Field label="For service"    value={content.service_name}   onChange={v => update("service_name", v)} />
+      <Field label="Receipt number" value={content.receipt_number} onChange={v => update("receipt_number", v)} required />
+      <Field label="Date"           value={content.date}           onChange={v => update("date", v)} required />
+      <Field label="For service"    value={content.for_service}    onChange={v => update("for_service", v)} required />
       <Field label="Payment mode"   value={content.payment_mode}   onChange={v => update("payment_mode", v)} />
 
       <SectionLabel>Received From</SectionLabel>
-      <Field label="Client name"    value={content.client_name}    onChange={v => update("client_name", v)} />
+      <Field label="Client name"    value={content.client_name}    onChange={v => update("client_name", v)} required />
       <Field label="Client phone"   value={content.client_phone}   onChange={v => update("client_phone", v)} />
 
       <SectionLabel>Payment</SectionLabel>
-      <Field label="Amount received"  value={content.amount_received}  onChange={v => update("amount_received", v)} />
+      <Field label="Amount received"  value={content.amount_received}  onChange={v => update("amount_received", v)} required />
       <Field label="Amount in words"  value={content.amount_in_words}  onChange={v => update("amount_in_words", v)} />
       <Field label="Balance"          value={content.balance}          onChange={v => update("balance", v)} />
 
@@ -128,7 +132,6 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
                   style={f.input as React.CSSProperties}
                   value={item[key] || ""}
                   onChange={e => updateItem(i, key, e.target.value)}
-                  readOnly={key === "amount"}
                 />
               </div>
             ))}
@@ -186,13 +189,11 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
   const [gstEnabled, setGstEnabled] = useState(parseFloat(content.gst_percent) > 0);
 
   useEffect(() => {
-    if (!content.line_items?.length) return;
-
     const parseAmt = (val: any) => {
       if (!val) return 0;
       return parseFloat(String(val).replace(/[₹,\s]/g, "")) || 0;
     };
-    const subtotal   = content.line_items.reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
+    const subtotal   = (content.line_items || []).reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
     const gstPercent = gstEnabled ? (parseFloat(content.gst_percent) || 0) : 0;
     const gstAmt     = (subtotal * gstPercent) / 100;
     const total      = subtotal + gstAmt;
@@ -215,9 +216,13 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
     const updated = [...(content.line_items || [])];
     updated[i] = { ...updated[i], [key]: val };
 
-    const hours     = parseFloat(updated[i].hours || 0);
-    const unitPrice = parseFloat(updated[i].unit_price || 0);
-    updated[i].amount = hours * unitPrice;
+    if (key === "hours" || key === "unit_price") {
+      const h = updated[i].hours;
+      const u = updated[i].unit_price;
+      if (h !== undefined && h !== "" && u !== undefined && u !== "") {
+        updated[i].amount = (parseFloat(h) || 0) * (parseFloat(u) || 0);
+      }
+    }
 
     update("line_items", updated);
   };
@@ -231,10 +236,10 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
   return (
     <div style={f.wrap}>
       <SectionLabel>Page 1 — Letter</SectionLabel>
-      <Field label="Client name"       value={content.client_name}         onChange={v => update("client_name", v)} />
+      <Field label="Client name"       value={content.client_name}         onChange={v => update("client_name", v)} required />
       <Field label="Organisation"      value={content.client_organisation} onChange={v => update("client_organisation", v)} />
       <Field label="Place"             value={content.client_place}        onChange={v => update("client_place", v)} />
-      <Field label="Date"              value={content.date}                onChange={v => update("date", v)} />
+      <Field label="Date"              value={content.date}                onChange={v => update("date", v)} required />
       <Field label="Sender name"       value={content.sender_name}         onChange={v => update("sender_name", v)} />
       <Field label="Sender title"      value={content.sender_designation}  onChange={v => update("sender_designation", v)} />
 
@@ -248,7 +253,7 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
 
       <SectionLabel>Page 2 — Quotation</SectionLabel>
       <Field label="Quotation number" value={content.quotation_number} onChange={v => update("quotation_number", v)} />
-      <Field label="Project name"     value={content.project_name}     onChange={v => update("project_name", v)} />
+      <Field label="Project name"     value={content.project_name}     onChange={v => update("project_name", v)} required />
 
       <SectionLabel>Line items</SectionLabel>
       {(content.line_items || []).map((item: any, i: number) => (
@@ -307,51 +312,35 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
 }
 
 export function ComplianceFields({ content, update }: { content: any, update: (k: string, v: any) => void }) {
-  const updatePara = (i: number, val: any) => {
-    const updated = [...(content.body_paragraphs || [])];
-    updated[i] = val;
-    update("body_paragraphs", updated);
-  };
-
   return (
     <div style={f.wrap}>
-      <Field label="Letter type"           value={content.letter_type}           onChange={v => update("letter_type", v)} />
-      <Field label="Date"                  value={content.date}                  onChange={v => update("date", v)} />
-      <Field label="Recipient name"        value={content.recipient_name}        onChange={v => update("recipient_name", v)} />
-      <Field label="Recipient designation" value={content.recipient_designation} onChange={v => update("recipient_designation", v)} />
-      <Field label="Recipient company"     value={content.recipient_company}     onChange={v => update("recipient_company", v)} />
-      <Field label="Subject"               value={content.subject}               onChange={v => update("subject", v)} />
-      <Field label="Salutation"            value={content.salutation}            onChange={v => update("salutation", v)} />
+      <SectionLabel>Client / Partner</SectionLabel>
+      <Field label="Client name"         value={content.client_name}         onChange={v => update("client_name", v)} required />
+      <Field label="Client designation"  value={content.client_designation}  onChange={v => update("client_designation", v)} />
 
-      <SectionLabel>Body paragraphs</SectionLabel>
-      {(content.body_paragraphs || []).map((p: string, i: number) => (
-        <div key={i} style={f.group}>
-          <div style={f.label}>Paragraph {i + 1}</div>
-          <textarea style={f.textarea as React.CSSProperties} value={p} rows={3} onChange={e => updatePara(i, e.target.value)} />
-        </div>
-      ))}
+      <SectionLabel>Service Provider</SectionLabel>
+      <Field label="Provider name"  value={content.provider_name}  onChange={v => update("provider_name", v)} />
+      <Field label="Provider role"  value={content.provider_role}  onChange={v => update("provider_role", v)} />
 
-      <SectionLabel>Sign-off</SectionLabel>
-      <Field label="Closing"              value={content.closing}              onChange={v => update("closing", v)} />
-      <Field label="Sender name"          value={content.sender_name}          onChange={v => update("sender_name", v)} />
-      <Field label="Sender designation"   value={content.sender_designation}   onChange={v => update("sender_designation", v)} />
-      <Field label="Sender contact"       value={content.sender_contact}       onChange={v => update("sender_contact", v)} />
+      <SectionLabel>Contact Info</SectionLabel>
+      <Field label="Company phone"   value={content.company_phone}   onChange={v => update("company_phone", v)} />
+      <Field label="Company email"   value={content.company_email}   onChange={v => update("company_email", v)} />
+      <Field label="Company website" value={content.company_website} onChange={v => update("company_website", v)} />
     </div>
   );
 }
+
 
 export function InvoiceFields({ content, update }: { content: any, update: (k: string, v: any) => void }) {
   const [gstEnabled, setGstEnabled] = useState(parseFloat(content.gst_percent) > 0);
 
   useEffect(() => {
-    if (!content.line_items?.length) return;
-
     const parseAmt = (val: any) => {
       if (!val) return 0;
       return parseFloat(String(val).replace(/[₹,\s]/g, "")) || 0;
     };
 
-    const subtotal   = content.line_items.reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
+    const subtotal   = (content.line_items || []).reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
     const gstPercent = gstEnabled ? (parseFloat(content.gst_percent) || 0) : 0;
     const gstAmt     = (subtotal * gstPercent) / 100;
     const total      = subtotal + gstAmt;
@@ -367,6 +356,15 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
   const updateItem = (i: number, key: string, val: any) => {
     const updated = [...(content.line_items || [])];
     updated[i] = { ...updated[i], [key]: val };
+
+    if (key === "hours" || key === "unit_price") {
+      const h = updated[i].hours;
+      const u = updated[i].unit_price;
+      if (h !== undefined && h !== "" && u !== undefined && u !== "") {
+        updated[i].amount = (parseFloat(h) || 0) * (parseFloat(u) || 0);
+      }
+    }
+
     update("line_items", updated);
   };
 
@@ -379,12 +377,13 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
   return (
     <div style={f.wrap}>
       <SectionLabel>Invoice info</SectionLabel>
-      <Field label="Invoice number" value={content.invoice_number} onChange={v => update("invoice_number", v)} />
-      <Field label="Date"           value={content.date}           onChange={v => update("date", v)} />
-      <Field label="Project name"   value={content.project_name}   onChange={v => update("project_name", v)} />
+      <Field label="Invoice number" value={content.invoice_number} onChange={v => update("invoice_number", v)} required />
+      <Field label="Date"           value={content.date}           onChange={v => update("date", v)} required />
+      <Field label="Project name"   value={content.project_name}   onChange={v => update("project_name", v)} required />
 
       <SectionLabel>Client info</SectionLabel>
-      <Field label="Client name"    value={content.client_name}    onChange={v => update("client_name", v)} />
+      <Field label="Client name"    value={content.client_name}    onChange={v => update("client_name", v)} required />
+      <Field label="Client phone"   value={content.client_phone}   onChange={v => update("client_phone", v)} />
       <Field label="Client email"   value={content.client_email}   onChange={v => update("client_email", v)} />
       <Field label="Client address" value={content.client_address} onChange={v => update("client_address", v)} />
 
@@ -449,9 +448,10 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
       <SectionLabel>Payment & status</SectionLabel>
       <Field label="Payment status" value={content.payment_status} onChange={v => update("payment_status", v)} />
       <Field label="Payment date"   value={content.payment_date}   onChange={v => update("payment_date", v)} />
+      <Field label="Due date"       value={content.due_date}       onChange={v => update("due_date", v)} />
       <Field label="Bank name"      value={content.bank_name}      onChange={v => update("bank_name", v)} />
       <Field label="Account name"   value={content.account_name}   onChange={v => update("account_name", v)} />
-      <Field label="Phone number"   value={content.phone_number}   onChange={v => update("phone_number", v)} />
+      <Field label="UPI phone"      value={content.upi_phone}      onChange={v => update("upi_phone", v)} />
       <Field label="UPI ID"         value={content.upi_id}         onChange={v => update("upi_id", v)} />
       <Field label="Notes"          value={content.notes}          onChange={v => update("notes", v)} multiline />
     </div>
@@ -459,6 +459,22 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
 }
 
 export function TimelineFields({ content, update }: { content: any, update: (k: string, v: any) => void }) {
+  useEffect(() => {
+    let totalHours = 0;
+    let hasHours = false;
+    (content.timeline_items || []).forEach((item: any) => {
+      if (item.hours) {
+        totalHours += parseFloat(item.hours) || 0;
+        hasHours = true;
+      }
+    });
+    
+    if (hasHours) {
+      update("total_time", `${totalHours} hours`);
+      update("expected_dev_time", `${totalHours} hours`);
+    }
+  }, [content.timeline_items]);
+
   const updateItem = (i: number, key: string, val: any) => {
     const updated = [...(content.timeline_items || [])];
     updated[i] = { ...updated[i], [key]: val };
@@ -477,9 +493,9 @@ export function TimelineFields({ content, update }: { content: any, update: (k: 
   return (
     <div style={f.wrap}>
       <SectionLabel>Project Info</SectionLabel>
-      <Field label="Project name"        value={content.project_name}        onChange={v => update("project_name", v)} />
+      <Field label="Project name"        value={content.project_name}        onChange={v => update("project_name", v)} required />
       <Field label="Project description" value={content.project_description} onChange={v => update("project_description", v)} />
-      <Field label="Client name"         value={content.client_name}         onChange={v => update("client_name", v)} />
+      <Field label="Client name"         value={content.client_name}         onChange={v => update("client_name", v)} required />
 
       <SectionLabel>Timeline Items</SectionLabel>
       {(content.timeline_items || []).map((item: any, i: number) => (

@@ -14,7 +14,7 @@ function getBlankContent(type: string) {
       return {
         receipt_number: "",
         date: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
-        service_name: "",
+        for_service: "",
         payment_mode: "",
         client_name: "",
         client_phone: "",
@@ -51,18 +51,13 @@ function getBlankContent(type: string) {
       };
     case "compliance":
       return {
-        letter_type: "",
-        date: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
-        recipient_name: "",
-        recipient_designation: "",
-        recipient_company: "",
-        subject: "",
-        salutation: "",
-        body_paragraphs: [],
-        closing: "",
-        sender_name: "",
-        sender_designation: "",
-        sender_contact: "",
+        client_name: "",
+        client_designation: "Client Representative",
+        provider_name: "MAKEWITHUS PVT LTD",
+        provider_role: "Authorized Representative",
+        company_phone: "+91 88385 14202",
+        company_email: "contact@makewithus.in",
+        company_website: "makewithus.in",
       };
     case "invoice":
       return {
@@ -70,6 +65,7 @@ function getBlankContent(type: string) {
         date: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
         project_name: "",
         client_name: "",
+        client_phone: "",
         client_email: "",
         client_address: "",
         project_description: "",
@@ -80,9 +76,10 @@ function getBlankContent(type: string) {
         total: "0",
         payment_status: "",
         payment_date: "",
+        due_date: "",
         bank_name: "",
         account_name: "",
-        phone_number: "",
+        upi_phone: "",
         upi_id: "",
         notes: "",
       };
@@ -174,7 +171,8 @@ export function useEditorState(id: string) {
         setSaved(true);
         setTimeout(() => setSaved(false), 1500);
       } catch {
-        // silent fail on auto-save
+        // Restore dirty so Save button reappears — do not silently swallow data loss
+        setDirty(true);
       }
     }, 500);
 

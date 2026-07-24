@@ -115,6 +115,10 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "not-allowed",
     borderColor: "#f0f0f0",
   },
+  inputError: {
+    borderColor: "#e74c3c",
+    background: "#fdf4f3",
+  },
   inputMonospace: {
     fontFamily: "monospace",
     fontSize: 12,
