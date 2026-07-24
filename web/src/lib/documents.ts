@@ -31,8 +31,9 @@ CRITICAL OUTPUT RULES:
 1. Return ONLY valid JSON — no markdown, no explanation, no preamble
 2. Do NOT wrap output in \`\`\`json\`\`\` or any code fences
 3. Start your response with { and end with }
-4. Every string field must be filled with real content specific to the input — never leave example placeholders
-5. body_paragraphs must reference the actual client name, project name, and features from the input
+4. NEVER INVENT OR HALLUCINATE INFORMATION! If a specific piece of information (e.g. client name, date, invoice number, phone number) is NOT present in the raw input, you MUST leave the field EMPTY (e.g. "").
+5. NEVER copy the placeholder values from the schema (like "DD/MM/YYYY", "PROJECT NAME", "INV-2025-001", "string"). Use "" instead if the data is missing.
+6. body_paragraphs must reference the actual client name, project name, and features from the input
 `;
 
 export const SCHEMAS: Record<string, any> = {
@@ -118,23 +119,13 @@ export const SCHEMAS: Record<string, any> = {
         ]
     },
     "compliance": {
-        "title": "string",
-        "doc_number": "HR/2025/001",
-        "date": "DD/MM/YYYY",
-        "from": "sender name and designation",
-        "to": "recipient name and designation",
-        "subject": "string — specific subject from input",
-        "salutation": "Dear Sir/Madam",
-        "body_paragraphs": [
-            "Fully written paragraph 1 — specific to the document purpose",
-            "Fully written paragraph 2 — legal/compliance details",
-            "Fully written paragraph 3 — closing/obligations"
-        ],
-        "closing": "Yours sincerely",
-        "signatory_name": "string",
-        "signatory_designation": "string",
-        "company_name": "MakeWithUs",
-        "enclosures": []
+        "client_name": "string — full name from input",
+        "company_phone": "+91 88385 14202",
+        "company_email": "contact@makewithus.in",
+        "company_website": "makewithus.in",
+        "provider_name": "MAKEWITHUS PVT LTD",
+        "provider_role": "Authorized Representative",
+        "client_designation": "Client Representative"
     },
     "invoice": {
         "invoice_number": "INV-2025-001",
@@ -219,9 +210,11 @@ export const calculateTotals = (content: any): any => {
         subtotal = safeFloat(content.subtotal);
     }
 
-    const gstPercent = safeFloat(content.gst_percent, 18);
-    const gstAmount = subtotal * (gstPercent / 100);
-    const total = subtotal + gstAmount;
+    // Use 0 as default so zero-GST invoices are not incorrectly taxed.
+    // The user must explicitly set gst_percent > 0 to apply tax.
+    const gstPercent = safeFloat(content.gst_percent, 0);
+    const gstAmount  = gstPercent > 0 ? subtotal * (gstPercent / 100) : 0;
+    const total      = subtotal + gstAmount;
 
     content.subtotal = subtotal;
     content.gst_percent = gstPercent;
@@ -260,10 +253,15 @@ export const calculateReceiptTotals = (content: any): any => {
     }
 
     const gstPercent = safeFloat(content.gst_percent, 0);
-    const gstAmount = baseAmount * (gstPercent / 100);
-    const total = baseAmount + gstAmount;
+    const gstAmount  = gstPercent > 0 ? baseAmount * (gstPercent / 100) : 0;
+    const total      = baseAmount + gstAmount;
 
-    content.amount_received = baseAmount;
+    // Only set amount_received from line items if it wasn't already set by the user
+    if (lineItems.length > 0 && !safeFloat(content.amount_received)) {
+        content.amount_received = baseAmount;
+    } else if (!content.amount_received) {
+        content.amount_received = baseAmount;
+    }
     content.gst_amount = gstAmount;
     content.total = total;
 

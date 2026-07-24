@@ -33,6 +33,7 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     const message =
+      error.response?.data?.error ||
       error.response?.data?.detail ||
       error.response?.data?.message ||
       error.message ||
@@ -53,7 +54,7 @@ export const uploadPDF = (file: File) => {
   form.append("file", file);
   return client.post("/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 30000, // 30s for file upload
+    timeout: 90000, // 90s for file upload and OCR
   });
 };
 
