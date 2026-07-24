@@ -81,8 +81,9 @@ ${JSON.stringify(schema, null, 2)}`
     }
 
     // Create document in Firestore
+    const extractedName = content.project_name || content.title || content.subject || content.for_service || content.service_name;
     const docData = {
-      project_name: content.project_name || 'Untitled Project',
+      project_name: extractedName || 'Untitled Project',
       template_type: typeToUse,
       raw_input: raw_input,
       content,
@@ -102,8 +103,8 @@ ${JSON.stringify(schema, null, 2)}`
         project_name: docData.project_name, 
         content 
     });
-  } catch (error) {
-    console.error('Error generating document:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[Generate Trace] Error generating document:', error?.message || error);
+    return NextResponse.json({ error: 'Generation failed: ' + (error?.message || 'Unknown error') }, { status: 500 });
   }
 }

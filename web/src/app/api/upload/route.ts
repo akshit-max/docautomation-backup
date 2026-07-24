@@ -3,11 +3,8 @@ import { adminStorage } from '@/lib/firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 
 const classifyDocument = async (text: string): Promise<string> => {
-    console.log('[Upload Trace] 1. OCR extracted text:', text.substring(0, 500) + (text.length > 500 ? '...' : ''));
-
-    // If text is very short or empty
+    // If text is too short to classify, default to developer_doc
     if (!text || text.length < 10) {
-        console.log('[Upload Trace] 2. Text too short. Defaulting to developer_doc.');
         return 'developer_doc';
     }
 
@@ -26,7 +23,7 @@ Rules:
 - If it looks like a payment receipt, return "receipt_template"
 - If it's a technical spec or developer task, return "developer_doc"
 - If it's a client proposal or quotation, return "client_doc"
-- If it's an HR or legal compliance document, return "compliance"
+- If it's a Service Agreement, Contract, HR, or legal document, return "compliance"
 - If it's an invoice, return "invoice"
 - If it's a project timeline, return "timeline"
 
@@ -41,7 +38,7 @@ Text to classify:
         messages: [{ role: 'user', content: prompt }]
     };
 
-    console.log('[Upload Trace] 3. Classification prompt sent to OpenRouter (max_tokens=10, model=' + payload.model + ')');
+    console.log(`[Classify] model=${payload.model}`);
 
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -62,10 +59,8 @@ Text to classify:
         
         // Safely extract the type string to prevent "Cannot read properties of null"
         const contentStr = data?.choices?.[0]?.message?.content || '';
-        console.log('[Upload Trace] 5. Extracted message content:', contentStr);
         
         const type = contentStr.trim().toLowerCase();
-        console.log('[Upload Trace] 6. Parsed classification result:', type);
         
         const validTypes = ['receipt_template', 'developer_doc', 'client_doc', 'compliance', 'invoice', 'timeline'];
         
@@ -73,10 +68,9 @@ Text to classify:
         const matchedType = validTypes.find(v => type.includes(v));
 
         if (matchedType) {
-            console.log('[Upload Trace] 7. Document type selected by the application:', matchedType);
             return matchedType;
         } else {
-            console.log('[Upload Trace] 7. Invalid type received ("' + type + '"). Defaulting to developer_doc.');
+            console.error('[Classify] Unrecognized type:', type, '— defaulting to developer_doc');
             return 'developer_doc';
         }
     } catch (e) {
@@ -122,7 +116,7 @@ export async function POST(request: Request) {
     let ocrResponse;
     try {
         const ocrTimeout = new AbortController();
-        const ocrTimeoutId = setTimeout(() => ocrTimeout.abort(), 30000); // 30s timeout
+        const ocrTimeoutId = setTimeout(() => ocrTimeout.abort(), 90000); // 90s timeout
 
         ocrResponse = await fetch(pythonUrl, {
             method: 'POST',
@@ -132,16 +126,22 @@ export async function POST(request: Request) {
         clearTimeout(ocrTimeoutId);
     } catch (err: any) {
         if (err?.name === 'AbortError') {
-            console.error('Python OCR service timed out after 30s');
-            return NextResponse.json({ error: 'OCR service timed out. Please try again.' }, { status: 504 });
+            console.error('Python OCR service timed out after 90s');
+            return NextResponse.json({ error: 'OCR service timed out. The document may be too large.' }, { status: 504 });
         }
         console.error('Failed to reach Python OCR service:', err);
         return NextResponse.json({ error: 'OCR service unreachable. Make sure the OCR server is running.' }, { status: 503 });
     }
 
     if (!ocrResponse.ok) {
-        console.error('OCR service error:', await ocrResponse.text());
-        return NextResponse.json({ error: 'OCR processing failed' }, { status: 500 });
+        const errText = await ocrResponse.text();
+        console.error('OCR service error:', errText);
+        try {
+            const errObj = JSON.parse(errText);
+            return NextResponse.json({ error: errObj.detail || 'OCR processing failed' }, { status: 500 });
+        } catch {
+            return NextResponse.json({ error: errText || 'OCR processing failed' }, { status: 500 });
+        }
     }
     
     const ocrData = await ocrResponse.json();
@@ -151,14 +151,16 @@ export async function POST(request: Request) {
     const detectedType = await classifyDocument(extractedText);
 
     // 4. Return to frontend matching exact UploadResponse format
-    return NextResponse.json({
+    const responsePayload = {
         filename: filename,
         extracted_text: extractedText,
         detected_type: detectedType,
         char_count: extractedText.length
-    });
-  } catch (error) {
-    console.error('Error in upload route:', error);
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+    };
+    console.log(`[Upload] Success: ${detectedType}, chars=${extractedText.length}`);
+    return NextResponse.json(responsePayload);
+  } catch (error: any) {
+    console.error('[Upload Trace] 9. Error in upload route:', error?.message || error);
+    return NextResponse.json({ error: 'Upload failed: ' + (error?.message || 'Unknown error') }, { status: 500 });
   }
 }

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 
-function getDefaultContent(templateType: string) {
+import { generateInvoiceNumber } from '@/lib/db';
+
+async function getDefaultContent(templateType: string) {
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
   
@@ -9,7 +11,7 @@ function getDefaultContent(templateType: string) {
   
   switch (templateType) {
     case 'invoice':
-      content.invoice_number = `MWU-INV-${Math.floor(100 + Math.random() * 900)}`;
+      content.invoice_number = await generateInvoiceNumber();
       break;
     case 'receipt_template':
       content.receipt_number = `RWC${Math.floor(100 + Math.random() * 900)}`;
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
       project_name: 'Untitled Project',
       template_type: body.template_type,
       raw_input: '',
-      content: getDefaultContent(body.template_type),
+      content: await getDefaultContent(body.template_type),
       html_content: '',
       source_file: null,
       isDeleted: false,
