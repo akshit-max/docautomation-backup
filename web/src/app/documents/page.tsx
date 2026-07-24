@@ -19,6 +19,8 @@ export default function Documents() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [renamingDoc, setRenamingDoc] = useState<any | null>(null);
+  const [renameInput, setRenameInput] = useState("");
   const router = useRouter();
 
   const load = () => {
@@ -48,6 +50,33 @@ export default function Documents() {
       alert("Delete failed. Try again.");
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleSaveRename = async () => {
+    if (!renamingDoc) return;
+    const newName = renameInput.trim();
+    if (!newName || newName === renamingDoc.project_name) {
+      setRenamingDoc(null);
+      return;
+    }
+    
+    // Optimistic update
+    setDocs(prev => prev.map(d => d.id === renamingDoc.id ? { ...d, project_name: newName } : d));
+    const docToUpdate = renamingDoc;
+    setRenamingDoc(null);
+    
+    try {
+      let key = "project_name";
+      if (docToUpdate.template_type === "compliance") key = "subject";
+      if (docToUpdate.template_type === "receipt_template") key = "service_name";
+      if (docToUpdate.template_type === "developer_doc") key = "title";
+      
+      const { updateDocument } = await import('@/lib/api');
+      await updateDocument(docToUpdate.id, { ...(docToUpdate.content || {}), [key]: newName });
+    } catch (err) {
+      alert("Rename failed. Please try again.");
+      load(); // revert
     }
   };
 
@@ -170,13 +199,26 @@ export default function Documents() {
                     >
                       Open editor →
                     </Link>
-                    <button
-                      style={deleting === doc.id ? s.deleteBtnDisabled : s.deleteBtn}
-                      onClick={e => handleDelete(e, doc.id)}
-                      disabled={deleting === doc.id}
-                    >
-                      {deleting === doc.id ? "Deleting..." : "Delete"}
-                    </button>
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <button
+                        style={{ ...s.deleteBtn, color: "#555", display: "flex", alignItems: "center", gap: 4 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRenamingDoc(doc);
+                          setRenameInput(doc.project_name || "Untitled Document");
+                        }}
+                      >
+                        <PencilIcon size={12} color="#555" />
+                        Rename
+                      </button>
+                      <button
+                        style={deleting === doc.id ? s.deleteBtnDisabled : s.deleteBtn}
+                        onClick={e => handleDelete(e, doc.id)}
+                        disabled={deleting === doc.id}
+                      >
+                        {deleting === doc.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -184,6 +226,30 @@ export default function Documents() {
           </div>
         )}
       </div>
+
+      {/* ── Rename Modal ── */}
+      {renamingDoc && (
+        <div style={modalStyles.overlay} onClick={() => setRenamingDoc(null)}>
+          <div style={modalStyles.content} onClick={e => e.stopPropagation()}>
+            <h3 style={modalStyles.title}>Rename Document</h3>
+            <input 
+              autoFocus
+              style={modalStyles.input as React.CSSProperties}
+              value={renameInput}
+              onChange={e => setRenameInput(e.target.value)}
+              onKeyDown={e => {
+                 if (e.key === 'Enter') handleSaveRename();
+                 if (e.key === 'Escape') setRenamingDoc(null);
+              }}
+              onFocus={e => e.target.select()}
+            />
+            <div style={modalStyles.actions}>
+              <button style={modalStyles.cancel} onClick={() => setRenamingDoc(null)}>Cancel</button>
+              <button style={modalStyles.save} onClick={handleSaveRename}>Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -200,6 +266,15 @@ function AsteriskIcon({ size = 18 }: { size?: number }) {
         objectFit: "contain",
       }}
     />
+  );
+}
+
+function PencilIcon({ size = 14, color = "#666" }: { size?: number; color?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
+      <path d="m15 5 4 4"/>
+    </svg>
   );
 }
 
@@ -246,4 +321,14 @@ const s = {
   editLink: { fontSize: 13, color: "#111", fontWeight: 600, textDecoration: "none" } as React.CSSProperties,
   deleteBtn: { fontSize: 12, color: "#c0392b", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" } as React.CSSProperties,
   deleteBtnDisabled: { fontSize: 12, color: "#bbb", background: "none", border: "none", padding: 0 } as React.CSSProperties,
+};
+
+const modalStyles = {
+  overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" } as React.CSSProperties,
+  content: { background: "#fff", borderRadius: 12, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" } as React.CSSProperties,
+  title: { fontSize: 16, fontWeight: 700, color: "#111", margin: "0 0 16px" } as React.CSSProperties,
+  input: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit" } as React.CSSProperties,
+  actions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 } as React.CSSProperties,
+  cancel: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
+  save: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
 };

@@ -18,7 +18,7 @@ import {
 const TYPE_LABELS: Record<string, string> = {
   receipt_template: "Receipt Template",
   client_doc: "Client Proposal",
-  compliance: "Compliance Letter",
+  compliance: "Service Agreement",
   invoice: "Invoice",
   timeline: "Project Timeline",
 };
@@ -28,6 +28,15 @@ const LANGUAGES = [
   "Marathi", "Bengali", "Gujarati", "Punjabi", "Odia",
   "English",
 ];
+
+function PencilIcon({ size = 14, color = "#666" }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
+      <path d="m15 5 4 4"/>
+    </svg>
+  );
+}
 
 export default function DocumentEditor() {
   const params = useParams();
@@ -63,6 +72,8 @@ export default function DocumentEditor() {
   const [promptOpen, setPromptOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [copied, setCopied] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameInput, setRenameInput] = useState("");
 
   // Translation state
   const [selectedLanguage, setSelectedLanguage] = useState("Hindi");
@@ -72,6 +83,21 @@ export default function DocumentEditor() {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveRename = () => {
+    const newName = renameInput.trim();
+    if (!newName) {
+      setRenaming(false);
+      return;
+    }
+    let key = "project_name";
+    if (doc.template_type === "compliance") key = "client_name";
+    if (doc.template_type === "receipt_template") key = "for_service";
+    if (doc.template_type === "developer_doc") key = "title";
+    
+    updateField(key, newName);
+    setRenaming(false);
   };
 
   const handlePromptRefill = async () => {
@@ -106,7 +132,47 @@ export default function DocumentEditor() {
     }
   };
 
+  const getMissingFields = () => {
+    if (!content) return [];
+    const missing: string[] = [];
+    const check = (key: string, label: string) => {
+      const val = content[key];
+      if (val === undefined || val === null || String(val).trim() === "") {
+        missing.push(label);
+      }
+    };
+    
+    if (doc?.template_type === "invoice") {
+      check("invoice_number", "Invoice Number");
+      check("date", "Date");
+      check("project_name", "Project Name");
+      check("client_name", "Client Name");
+    } else if (doc?.template_type === "receipt_template") {
+      check("receipt_number", "Receipt Number");
+      check("date", "Date");
+      check("for_service", "For Service");
+      check("client_name", "Client Name");
+      check("amount_received", "Amount Received");
+    } else if (doc?.template_type === "client_doc") {
+      check("client_name", "Client Name");
+      check("date", "Date");
+      check("project_name", "Project Name");
+    } else if (doc?.template_type === "compliance") {
+      check("client_name", "Client Name");
+    } else if (doc?.template_type === "timeline") {
+      check("project_name", "Project Name");
+      check("client_name", "Client Name");
+    }
+    
+    return missing;
+  };
+
   const handleDownloadPDF = () => {
+    const missing = getMissingFields();
+    if (missing.length > 0) {
+      alert(`Please fill in the following required fields before downloading:\n- ${missing.join('\n- ')}`);
+      return;
+    }
     window.open(`/api/doc/${id}/preview?autoprint=1`, "_blank");
   };
 
@@ -142,7 +208,20 @@ export default function DocumentEditor() {
       <div style={s.topbar}>
         <div style={s.topLeft}>
           <div style={s.topDivider} />
-          <span style={s.docName}>{doc.project_name || "Untitled"}</span>
+          <span style={s.docName} title={content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document"}>
+            {content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document"}
+          </span>
+          <button
+            style={{ ...s.btnIcon, border: "none", background: "none", padding: "2px", display: "flex", alignItems: "center", cursor: "pointer" }}
+            onClick={() => {
+              const currentName = content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document";
+              setRenameInput(currentName);
+              setRenaming(true);
+            }}
+            title="Rename document"
+          >
+            <PencilIcon size={14} color="#888" />
+          </button>
           <TypeBadge type={doc.template_type} />
           {dirty && <span style={s.unsavedDot} title="Unsaved changes" />}
         </div>
@@ -335,6 +414,30 @@ export default function DocumentEditor() {
           </div>
         </div>
       </div>
+      
+      {/* ── Rename Modal ── */}
+      {renaming && (
+        <div style={modalStyles.overlay} onClick={() => setRenaming(false)}>
+          <div style={modalStyles.content} onClick={e => e.stopPropagation()}>
+            <h3 style={modalStyles.title}>Rename Document</h3>
+            <input 
+              autoFocus
+              style={modalStyles.input as React.CSSProperties}
+              value={renameInput}
+              onChange={e => setRenameInput(e.target.value)}
+              onKeyDown={e => {
+                 if (e.key === 'Enter') handleSaveRename();
+                 if (e.key === 'Escape') setRenaming(false);
+              }}
+              onFocus={e => e.target.select()}
+            />
+            <div style={modalStyles.actions}>
+              <button style={modalStyles.cancel} onClick={() => setRenaming(false)}>Cancel</button>
+              <button style={modalStyles.save} onClick={handleSaveRename}>Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -458,4 +561,14 @@ const translateBtn: React.CSSProperties = {
 const translateBtnDisabled: React.CSSProperties = {
   width: "100%", fontSize: 12, background: "#aaa", color: "#fff",
   border: "none", borderRadius: 6, padding: "8px 0", cursor: "not-allowed",
+};
+
+const modalStyles = {
+  overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" } as React.CSSProperties,
+  content: { background: "#fff", borderRadius: 12, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" } as React.CSSProperties,
+  title: { fontSize: 16, fontWeight: 700, color: "#111", margin: "0 0 16px" } as React.CSSProperties,
+  input: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit" } as React.CSSProperties,
+  actions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 } as React.CSSProperties,
+  cancel: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
+  save: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
 };
