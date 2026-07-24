@@ -1,5 +1,50 @@
-__pycache__/ 
-*.pyc 
-venv/ 
-env/ 
-*.pdf 
+# MakeWithUs Root .gitignore
+
+# Environments
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+venv/
+env/
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads & Local Files
+uploads/
+backend/uploads/
+web/uploads/
+
+# Documents & Images (Test data)
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# Exception for actual logo assets in web/public
+!web/public/**/*.png
+!web/public/**/*.svg
+!web/public/**/*.jpg
+!web/public/**/*.jpeg
+
+# IDEs and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
