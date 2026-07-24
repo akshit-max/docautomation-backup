@@ -53,8 +53,6 @@ Text to classify:
         });
         
         const rawText = await response.text();
-        console.log('[Upload Trace] 4. Raw OpenRouter response:', rawText);
-        
         const data = JSON.parse(rawText);
         
         // Safely extract the type string to prevent "Cannot read properties of null"
