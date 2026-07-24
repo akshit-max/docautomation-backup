@@ -199,10 +199,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   </div>
 </body>
 </html>`;
-    }
-
-    if (autoprint) {
-      html = html.replace('</body>', '<script>window.onload=function(){window.print()}</script></body>');
+      if (autoprint) {
+        html = html.replace('</body>', '<script>window.onload=function(){window.print()}</script></body>');
+      }
     }
 
     return new NextResponse(html, {

@@ -50,7 +50,8 @@ ${JSON.stringify(docData?.content || {})}`
     });
 
     if (!response.ok) {
-      console.error('OpenRouter API error on translate');
+      const errBody = await response.text();
+      console.error('OpenRouter API error on translate:', errBody);
       return NextResponse.json({ error: 'Translation failed' }, { status: 500 });
     }
 

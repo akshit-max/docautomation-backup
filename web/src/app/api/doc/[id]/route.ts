@@ -59,7 +59,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     };
 
     // Keep the root project_name in sync with the content so the dashboard displays it correctly
-    const newName = updatedContent.project_name || updatedContent.title || updatedContent.subject || updatedContent.for_service;
+    const newName = updatedContent.project_name || updatedContent.title || updatedContent.subject || updatedContent.for_service || updatedContent.client_name;
     if (newName) {
       updates.project_name = newName;
     }

@@ -113,8 +113,8 @@ ${JSON.stringify(schema, null, 2)}`
       html_content: '',  // HTML is not server-rendered; Editor uses the JSON content directly
       document: { content },
     });
-  } catch (error) {
-    console.error('Error refilling document:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error refilling document:', error?.message || error);
+    return NextResponse.json({ error: 'Refill failed: ' + (error?.message || 'Unknown error') }, { status: 500 });
   }
 }
