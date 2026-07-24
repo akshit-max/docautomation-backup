@@ -14,6 +14,7 @@ import {
   InvoiceFields,
   TimelineFields,
 } from "@/components/editor/EditorForms";
+import { AiValidationPanel } from "@/components/editor/AiValidationPanel";
 
 const TYPE_LABELS: Record<string, string> = {
   receipt_template: "Receipt Template",
@@ -379,6 +380,20 @@ export default function DocumentEditor() {
               <span style={s.panelSubtitle}>{TYPE_LABELS[doc.template_type] || doc.template_type}</span>
             </div>
             <div style={s.panelScroll}>
+              {doc.template_type && (
+                <AiValidationPanel 
+                  templateType={doc.template_type} 
+                  content={content} 
+                  onApplySuggestion={(newContent) => {
+                    // Update all fields at once
+                    Object.keys(newContent).forEach(key => {
+                      if (newContent[key] !== content[key]) {
+                        updateField(key, newContent[key]);
+                      }
+                    });
+                  }}
+                />
+              )}
               {doc.template_type === "receipt_template" && <ReceiptFields content={content} update={updateField} />}
               {doc.template_type === "client_doc" && <ClientDocFields content={content} update={updateField} />}
               {doc.template_type === "compliance" && <ComplianceFields content={content} update={updateField} />}

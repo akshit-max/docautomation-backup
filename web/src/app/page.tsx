@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createDocument, uploadPDF, generateDoc } from "@/lib/api";
@@ -13,7 +13,7 @@ const TEMPLATES = [
   { type: "timeline",          title: "Project Timeline",  description: "Phase-wise project timeline with hours and closure date" },
 ];
 
-type UploadPhase = "idle" | "uploading" | "generating" | "done";
+type UploadPhase = "idle" | "uploading" | "ocr" | "classifying" | "generating" | "saving" | "done";
 
 export default function Home() {
   const router = useRouter();
@@ -39,6 +39,21 @@ export default function Home() {
   };
 
   // ── Upload / OCR / Generate handler ───────────────────────────────────────
+  // [ARCH-DEBT: TEMPORARY UX]
+  // Condition for replacement: Replace with real SSE/WebSocket progress events when Bulk Upload (Phase 9) is implemented.
+  // Do not replace preemptively.
+  useEffect(() => {
+    let timer1: NodeJS.Timeout, timer2: NodeJS.Timeout;
+    if (uploadPhase === "uploading") {
+      timer1 = setTimeout(() => setUploadPhase("ocr"), 1500);
+      timer2 = setTimeout(() => setUploadPhase("classifying"), 5000);
+    }
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, [uploadPhase]);
+
   const handleFile = async (file: File) => {
     if (!file) return;
     if (!file.name.match(/\.(pdf|PDF)$/)) {
@@ -46,10 +61,10 @@ export default function Home() {
       return;
     }
 
-    setUploadError("");
-    setUploadPhase("uploading");
-
     try {
+      setUploadError("");
+      setUploadPhase("uploading");
+
       // 1. Upload → OCR → classify
       const uploadRes = await uploadPDF(file);
       const { extracted_text, detected_type } = uploadRes.data;
@@ -60,8 +75,10 @@ export default function Home() {
       const genRes = await generateDoc(extracted_text, detected_type);
       const docId = genRes.data.doc_id;
 
-      setUploadPhase("done");
+      setUploadPhase("saving");
+      
       router.push(`/doc/${docId}`);
+      
     } catch (err: any) {
       setUploadPhase("idle");
       setUploadError(
@@ -94,10 +111,14 @@ export default function Home() {
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
           <span style={s.logoText}>makewithus</span>
         </div>
-        {/* Documents navigation — was missing */}
-        <Link href="/documents" style={s.docsLink}>
-          All documents →
-        </Link>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Link href="/analytics" style={s.docsLink}>
+            Analytics
+          </Link>
+          <Link href="/documents" style={s.docsLink}>
+            View documents →
+          </Link>
+        </div>
       </div>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
@@ -175,7 +196,25 @@ export default function Home() {
           <>
             <div style={s.spinner} />
             <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              Uploading and extracting text...
+              Uploading document...
+            </div>
+          </>
+        )}
+
+        {uploadPhase === "ocr" && (
+          <>
+            <div style={s.spinner} />
+            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
+              Extracting text (OCR)...
+            </div>
+          </>
+        )}
+
+        {uploadPhase === "classifying" && (
+          <>
+            <div style={s.spinner} />
+            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
+              Classifying document type...
             </div>
           </>
         )}
@@ -184,7 +223,16 @@ export default function Home() {
           <>
             <div style={s.spinner} />
             <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              AI is filling your document...
+              AI is structuring your data...
+            </div>
+          </>
+        )}
+
+        {uploadPhase === "saving" && (
+          <>
+            <div style={s.spinner} />
+            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
+              Saving document...
             </div>
           </>
         )}

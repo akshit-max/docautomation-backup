@@ -68,8 +68,8 @@ export default function Documents() {
     
     try {
       let key = "project_name";
-      if (docToUpdate.template_type === "compliance") key = "subject";
-      if (docToUpdate.template_type === "receipt_template") key = "service_name";
+      if (docToUpdate.template_type === "compliance") key = "client_name";  // compliance shows client_name in dashboard
+      if (docToUpdate.template_type === "receipt_template") key = "for_service"; // fixed: was 'service_name' (legacy name removed in Phase 4)
       if (docToUpdate.template_type === "developer_doc") key = "title";
       
       const { updateDocument } = await import('@/lib/api');
@@ -82,7 +82,21 @@ export default function Documents() {
 
   const filtered = docs.filter(d => {
     const matchType = filter === "all" || d.template_type === filter;
-    const matchSearch = (d.project_name || "").toLowerCase().includes(search.toLowerCase());
+    
+    const term = search.toLowerCase();
+    let matchSearch = true;
+    
+    if (term) {
+      const pName = (d.project_name || "").toLowerCase();
+      const rawText = (d.raw_input || "").toLowerCase();
+      // [ARCH-DEBT: CLIENT-SIDE SEARCH]
+      // Condition for replacement: When total document count exceeds ~1000 and rendering/searching becomes a measurable bottleneck,
+      // move to server-side querying or an indexed search solution (e.g. Algolia/Elastic). Do not replace prematurely.
+      const contentText = d.content ? JSON.stringify(d.content).toLowerCase() : "";
+      
+      matchSearch = pName.includes(term) || contentText.includes(term) || rawText.includes(term);
+    }
+    
     return matchType && matchSearch;
   });
 
@@ -105,7 +119,10 @@ export default function Documents() {
             <span style={s.logoText}>makewithus</span>
           </Link>
         </div>
-        <Link href="/" style={s.newBtn}>+ New document</Link>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Link href="/analytics" style={{...s.newBtn, background: '#fff', color: '#111', border: '1px solid #ddd'}}>Analytics</Link>
+          <Link href="/" style={s.newBtn}>+ New document</Link>
+        </div>
       </div>
 
       <div style={s.wrap}>
