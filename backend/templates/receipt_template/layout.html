@@ -372,7 +372,7 @@ div {
 
       <span class="mk">For Service</span>
       <span class="mv" contenteditable="true">
-        {{ service_name or '—' }}
+        {{ for_service or service_name or '—' }}
       </span>
 
       <span class="mk">Payment Mode</span>
@@ -410,7 +410,7 @@ div {
 
     <div class="kv-row">
       <span class="rk">For Service:</span>
-      <span class="rv" contenteditable="true">{{ service_name or '—' }}</span>
+      <span class="rv" contenteditable="true">{{ for_service or service_name or '—' }}</span>
     </div>
 
     <div class="kv-row">
@@ -512,7 +512,7 @@ div {
       <div class="srow">
         <span class="sk">Project</span>
         <span class="sv" contenteditable="true">
-          {{ service_name or project_name or '—' }}
+          {{ for_service or service_name or project_name or '—' }}
         </span>
       </div>
 
