@@ -1,8 +1,7 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    
-    OPENROUTER_API_KEY: str
+    OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_SITE_URL: str = "http://localhost:5173"
     OPENROUTER_SITE_NAME: str = "Doc Automation"

@@ -18,27 +18,32 @@ def extract_text_from_pdf (pdf_path:str)->str:
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"PDF not found: {pdf_path}")
     
-    doc= fitz.open(pdf_path)
-    text=""
+    doc = fitz.open(pdf_path)
+    text = ""
 
-    for page_num, page in enumerate(doc,start=1):
-        page_text=page.get_text("text")
-        
-        if not page_text.strip():
-            # Fallback to OCR for scanned pages
-            pix = page.get_pixmap(dpi=200)
-            img_path = os.path.join(tempfile.gettempdir(), f"page_{page_num}.png")
-            pix.save(img_path)
-            try:
-                page_text = extract_text_from_image(img_path)
-            finally:
-                if os.path.exists(img_path):
-                    os.remove(img_path)
-                    
-        if page_text.strip():
-            text+=f"\n--- Page {page_num} ---\n{page_text}"
-    doc.close()
-    cleaned=text.strip()
+    try:
+        for page_index in range(len(doc)):
+            page_num = page_index + 1
+            page = doc[page_index]
+            page_text = str(page.get_text("text"))
+            
+            if not page_text.strip():
+                # Fallback to OCR for scanned pages
+                pix = page.get_pixmap(dpi=200)
+                img_path = os.path.join(tempfile.gettempdir(), f"page_{page_num}.png")
+                pix.save(img_path)
+                try:
+                    page_text = extract_text_from_image(img_path)
+                finally:
+                    if os.path.exists(img_path):
+                        os.remove(img_path)
+                        
+            if page_text.strip():
+                text += f"\n--- Page {page_num} ---\n{page_text}"
+    finally:
+        doc.close()
+
+    cleaned = text.strip()
 
     if not cleaned:
         raise ValueError(
@@ -51,11 +56,12 @@ def get_pdf_metadata(pdf_path:str)->dict:
     """
     Returns page count and basic PDF metadata.
     """
-    doc= fitz.open(pdf_path)
+    doc = fitz.open(pdf_path)
+    metadata = doc.metadata or {}
     meta = {
         "page_count": doc.page_count,
-        "title":doc.metadata.get("title",""),
-        "author":doc.metadata.get("author",""),
+        "title": metadata.get("title", ""),
+        "author": metadata.get("author", ""),
     }
     doc.close()
     return meta
