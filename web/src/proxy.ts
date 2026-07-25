@@ -6,6 +6,14 @@ export default function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow preview and export endpoints to be accessed directly (e.g. opened in a new tab or downloaded)
+  if (
+    request.nextUrl.pathname.includes('/preview') ||
+    request.nextUrl.pathname.includes('/export')
+  ) {
+    return NextResponse.next();
+  }
+
   // ── Same-origin browser requests ────────────────────────────────────────
   // Requests from the browser to the same Next.js server carry an Origin
   // or Referer header matching the server host. These are always allowed
