@@ -20,6 +20,10 @@ import { saveVersion } from "@/lib/api";
 import { Clock, MessageSquareText, Languages, Download, Share2, ExternalLink, Save, Play, Mic, ChevronDown, FileText, FileCode, FileSpreadsheet, Loader2, Sparkles } from "lucide-react";
 import ChatPanel from "./ChatPanel";
 import { notify } from "@/lib/notify";
+import { ALLOWED_STATUSES, getStatusColor, DocumentStatus } from '@/lib/constants/document-status';
+import { TagEditor } from '@/components/editor/TagEditor';
+import { NotesPanel } from '@/components/editor/NotesPanel';
+import { Star } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
   receipt_template: "Receipt Template",
@@ -98,6 +102,55 @@ export default function DocumentEditor() {
 
   // Export state
   const [exportOpen, setExportOpen] = useState(false);
+
+  // Status & Favorite state
+  const [docStatus, setDocStatus] = useState<string>("Draft");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  React.useEffect(() => {
+    if (doc) {
+      setDocStatus(doc.status ?? DocumentStatus.Draft);
+      setIsFavorite(doc.isFavorite || false);
+    }
+  }, [doc]);
+
+  const handleToggleFavorite = async () => {
+    const newFav = !isFavorite;
+    setIsFavorite(newFav);
+    try {
+      const res = await fetch(`/api/doc/${id}/favorite`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isFavorite: newFav })
+      });
+      if (!res.ok) throw new Error();
+    } catch (e) {
+      notify.error("Failed to update favorite status");
+      if (doc) setIsFavorite(doc.isFavorite || false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (updatingStatus) return;
+    setUpdatingStatus(true);
+    setDocStatus(newStatus); // Optimistic UI update
+
+    try {
+      const res = await fetch(`/api/doc/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error("Status update failed");
+      notify.success(`Status updated to ${newStatus}`);
+    } catch (e) {
+      notify.error("Failed to update status");
+      if (doc) setDocStatus(doc.status ?? DocumentStatus.Draft); // Revert
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -339,7 +392,38 @@ export default function DocumentEditor() {
           >
             <PencilIcon size={14} color="#94a3b8" />
           </button>
+          <button 
+            onClick={handleToggleFavorite}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', display: 'flex', alignItems: 'center' }}
+          >
+            <Star size={18} fill={isFavorite ? "#eab308" : "none"} color={isFavorite ? "#eab308" : "#ccc"} />
+          </button>
           <TypeBadge type={doc.template_type} />
+          
+          <div style={{ position: 'relative', marginLeft: 8, marginRight: 8 }}>
+            <select 
+              style={{ 
+                ...s.btnOutline,
+                padding: '4px 24px 4px 10px',
+                fontSize: 12,
+                appearance: 'none',
+                background: '#fff',
+                cursor: 'pointer'
+              }}
+              value={docStatus}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={updatingStatus}
+            >
+              {ALLOWED_STATUSES.map(st => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#666' }} />
+          </div>
+
+          <TagEditor documentId={id} initialTags={doc.tags || []} />
+          <NotesPanel documentId={id} initialNotes={doc.notes || ""} />
+
           {dirty && <span style={s.unsavedDot} title="Unsaved changes" />}
         </div>
 

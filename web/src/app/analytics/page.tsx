@@ -16,7 +16,17 @@ import {
   Clock,
   ShieldCheck,
   File,
-  AlertCircle
+  AlertCircle,
+  Star,
+  Lightbulb,
+  Tag,
+  FileCheck,
+  XCircle,
+  Timer,
+  Zap,
+  Award,
+  Activity,
+  BarChart2
 } from "lucide-react";
 import { ActivityBell } from "@/components/ActivityBell";
 
@@ -127,6 +137,11 @@ export default function Analytics() {
   const topExportName = data?.dashboard?.insights?.topExport || "None";
   const peakActivityName = data?.dashboard?.insights?.peakActivity || "N/A";
 
+  // Derive Organization Features (Sprint v1.3)
+  const statusDistribution = data?.dashboard?.organization?.statusDistribution || [];
+  const topTags = data?.dashboard?.organization?.topTags || [];
+  const favoriteCount = data?.dashboard?.organization?.favoriteCount || 0;
+
   // Derive Donut Chart SVG segments
   const templatesList = (data?.templates || []).slice(0, 5);
   const donutSegments = templatesList.map((t: any, idx: number, arr: any[]) => {
@@ -232,15 +247,17 @@ export default function Analytics() {
                 </div>
               </div>
 
+
+
               <div style={s.kpiCard}>
                 <div style={s.kpiHeader}>
-                  <span style={s.kpiLabel}>Avg Processing Time</span>
-                  <Clock size={18} color="#f59e0b" />
+                  <span style={s.kpiLabel}>Favorites</span>
+                  <Star size={18} color="#eab308" />
                 </div>
-                <div style={s.kpiValue}>{avgProcessingFormatted}</div>
+                <div style={s.kpiValue}>{favoriteCount}</div>
                 <div style={s.kpiSub}>
-                  <span style={s.badgeAmber}>⚡ Real-time</span>
-                  <span style={s.kpiNote}>target &lt; 5.0s</span>
+                  <span style={s.badgePurple}>⭐ Starred</span>
+                  <span style={s.kpiNote}>important docs</span>
                 </div>
               </div>
             </div>
@@ -248,9 +265,14 @@ export default function Analytics() {
             {/* ── 2. Documents Processed (7-Day Trend Chart) ── */}
             <div style={s.sectionCard}>
               <div style={s.cardHeader}>
-                <div>
-                  <h2 style={s.cardTitle}>Documents Processed (Last 7 Days)</h2>
-                  <p style={s.cardSubtitle}>Comparison between raw uploads and AI generated documents</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <BarChart2 size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>Documents Processed (Last 7 Days)</h2>
+                    <p style={s.cardSubtitle}>Comparison between raw uploads and AI generated documents</p>
+                  </div>
                 </div>
                 <div style={s.chartLegend}>
                   <div style={s.legendItem}><span style={{ ...s.legendDot, background: "#0f172a" }} /> Uploaded Docs</div>
@@ -306,8 +328,15 @@ export default function Analytics() {
 
               {/* ── 3. Documents by Template (Donut Chart) ── */}
               <div style={s.sectionCard}>
-                <h2 style={s.cardTitle}>Documents by Template</h2>
-                <p style={s.cardSubtitle}>Distribution across structured document types</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#ca8a04', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>Documents by Template</h2>
+                    <p style={s.cardSubtitle}>Distribution across structured document types</p>
+                  </div>
+                </div>
 
                 <div style={s.donutContainer}>
                   {/* Visual CSS Conic Gradient Donut */}
@@ -349,8 +378,15 @@ export default function Analytics() {
 
               {/* ── 4. Processing Status (Success vs Failed) ── */}
               <div style={s.sectionCard}>
-                <h2 style={s.cardTitle}>Processing Status</h2>
-                <p style={s.cardSubtitle}>Pipeline reliability and error rates</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#16a34a', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ShieldCheck size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>Processing Status</h2>
+                    <p style={s.cardSubtitle}>Pipeline reliability and error rates</p>
+                  </div>
+                </div>
 
                 <div style={s.statusContainer}>
                   <div style={s.statusBlock}>
@@ -394,8 +430,15 @@ export default function Analytics() {
 
               {/* ── 5. AI Usage ── */}
               <div style={s.sectionCard}>
-                <h2 style={s.cardTitle}>AI Feature Adoption</h2>
-                <p style={s.cardSubtitle}>Generative AI touchpoints and assistant usage</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#7c3aed', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>AI Feature Adoption</h2>
+                    <p style={s.cardSubtitle}>Generative AI touchpoints and assistant usage</p>
+                  </div>
+                </div>
 
                 <div style={s.statsGrid3}>
                   <div style={s.statMiniCard}>
@@ -427,85 +470,193 @@ export default function Analytics() {
                 </div>
               </div>
 
-              {/* ── 6. Export Statistics ── */}
+              {/* ── 6. Export Options ── */}
               <div style={s.sectionCard}>
-                <h2 style={s.cardTitle}>Export Distribution</h2>
-                <p style={s.cardSubtitle}>Preferred document output formats</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#2563eb', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <File size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>Export Formats</h2>
+                    <p style={s.cardSubtitle}>Supported file outputs for your generated documents</p>
+                  </div>
+                </div>
 
-                <div style={s.exportGrid4}>
-                  <div style={s.exportItem}>
-                    <div style={{ ...s.exportIconBox, background: "#fef2f2", color: "#ef4444" }}>
-                      <FileText size={18} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e11d48' }}>
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>PDF Document</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>Standard sharing format</div>
+                      </div>
                     </div>
-                    <div style={s.exportVal}>{exportPdfCount}</div>
-                    <div style={s.exportLabel}>PDF Document</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{exportPdfCount || '-'}</div>
                   </div>
 
-                  <div style={s.exportItem}>
-                    <div style={{ ...s.exportIconBox, background: "#f0fdf4", color: "#16a34a" }}>
-                      <FileSpreadsheet size={18} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+                        <FileSpreadsheet size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Excel Sheet</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>For data analysis</div>
+                      </div>
                     </div>
-                    <div style={s.exportVal}>{exportExcelCount}</div>
-                    <div style={s.exportLabel}>Excel Sheet</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{exportExcelCount || '-'}</div>
                   </div>
 
-                  <div style={s.exportItem}>
-                    <div style={{ ...s.exportIconBox, background: "#eff6ff", color: "#2563eb" }}>
-                      <FileCode size={18} />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
+                        <FileCode size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>JSON Payload</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>For API integrations</div>
+                      </div>
                     </div>
-                    <div style={s.exportVal}>{exportJsonCount}</div>
-                    <div style={s.exportLabel}>JSON Payload</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{exportJsonCount || '-'}</div>
                   </div>
-
-                  <div style={s.exportItem}>
-                    <div style={{ ...s.exportIconBox, background: "#fffbeb", color: "#d97706" }}>
-                      <File size={18} />
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
+                        <File size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>CSV Table</div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>For bulk imports</div>
+                      </div>
                     </div>
-                    <div style={s.exportVal}>{exportCsvCount}</div>
-                    <div style={s.exportLabel}>CSV Table</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{exportCsvCount || '-'}</div>
                   </div>
                 </div>
               </div>
 
             </div>
 
-            {/* ── 2-Column Grid Row 3: Insights Panel ⭐ & Recent Activity ── */}
+            {/* ── 2-Column Grid Row 3: Organization & Classification ── */}
+            <div style={s.gridRow2}>
+              {/* ── 7. Status Distribution ── */}
+              <div style={s.sectionCard}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#0d9488', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Activity size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>Status Distribution</h2>
+                    <p style={s.cardSubtitle}>Workflow progress across all documents</p>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                  {statusDistribution.length === 0 ? (
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>No status data available</div>
+                  ) : (
+                    statusDistribution.map((st: any) => (
+                      <div key={st.status} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 6, background: '#fff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: st.status === 'Approved' ? '#10b981' : st.status === 'Rejected' ? '#ef4444' : '#3b82f6' }}>
+                            {st.status === 'Approved' ? <CheckCircle2 size={16} /> : st.status === 'Rejected' ? <XCircle size={16} /> : <Timer size={16} />}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{st.status}</div>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Current state</div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{st.count} <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>docs</span></div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* ── 8. Top 10 Tags ── */}
+              <div style={s.sectionCard}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#e11d48', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Tag size={20} />
+                  </div>
+                  <div>
+                    <h2 style={s.cardTitle}>Top 10 Tags</h2>
+                    <p style={s.cardSubtitle}>Most frequently used classifications</p>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
+                  {topTags.length === 0 ? (
+                    <div style={{ fontSize: 13, color: '#94a3b8' }}>No tags used yet</div>
+                  ) : (
+                    topTags.map((tagObj: any) => (
+                      <div key={tagObj.tag} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#fff', borderRadius: 999, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                        <Tag size={14} color="#6366f1" />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{tagObj.tag}</span>
+                        <span style={{ fontSize: 11, color: '#fff', background: '#6366f1', padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>{tagObj.count}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── 2-Column Grid Row 4: Insights Panel ⭐ & Recent Activity ── */}
             <div style={s.gridRow2}>
 
               {/* ── 7. Insights Panel ⭐ ── */}
-              <div style={{ ...s.sectionCard, background: "linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)", borderColor: "#bfdbfe" }}>
+              <div style={{ ...s.sectionCard, background: "#ffffff" }}>
                 <div style={s.insightsHeader}>
-                  <div style={s.insightsIconBox}>💡</div>
+                  <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#eab308', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Lightbulb size={20} />
+                  </div>
                   <div>
-                    <h2 style={{ ...s.cardTitle, color: "#1e3a8a" }}>Operational Insights</h2>
-                    <p style={{ ...s.cardSubtitle, color: "#3b82f6" }}>Automated intelligence derived from your workflow</p>
+                    <h2 style={s.cardTitle}>Operational Insights</h2>
+                    <p style={s.cardSubtitle}>Automated intelligence derived from your workflow</p>
                   </div>
                 </div>
 
-                <div style={s.insightsList}>
-                  <div style={s.insightRow}>
-                    <span style={s.insightKey}>Most used template</span>
-                    <span style={s.insightVal}>{topTemplateName}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #dbeafe', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Award size={16} color="#eab308" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a8a' }}>Most used template</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{topTemplateName}</span>
                   </div>
 
-                  <div style={s.insightRow}>
-                    <span style={s.insightKey}>Fastest processing speed</span>
-                    <span style={s.insightVal}>Real-time (&lt; 2.5s)</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #dbeafe', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Zap size={16} color="#f59e0b" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a8a' }}>Fastest processing speed</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Real-time (&lt; 2.5s)</span>
                   </div>
 
-                  <div style={s.insightRow}>
-                    <span style={s.insightKey}>Average OCR confidence</span>
-                    <span style={s.insightVal}>99.4% (Verified)</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #dbeafe', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <ShieldCheck size={16} color="#10b981" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a8a' }}>Average OCR confidence</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>99.4% (Verified)</span>
                   </div>
 
-                  <div style={s.insightRow}>
-                    <span style={s.insightKey}>Top export format</span>
-                    <span style={s.insightVal}>{topExportName}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #dbeafe', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <FileText size={16} color="#6366f1" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a8a' }}>Top export format</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{topExportName}</span>
                   </div>
 
-                  <div style={s.insightRow}>
-                    <span style={s.insightKey}>Peak workspace activity</span>
-                    <span style={s.insightVal}>{peakActivityName}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderRadius: 8, border: '1px solid #dbeafe', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Activity size={16} color="#ec4899" />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a8a' }}>Peak workspace activity</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{peakActivityName}</span>
                   </div>
                 </div>
               </div>
@@ -513,9 +664,14 @@ export default function Analytics() {
               {/* ── 8. Recent Activity ── */}
               <div style={s.sectionCard}>
                 <div style={s.cardHeader}>
-                  <div>
-                    <h2 style={s.cardTitle}>Recent Activity</h2>
-                    <p style={s.cardSubtitle}>Latest 5 document operations</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Clock size={20} />
+                    </div>
+                    <div>
+                      <h2 style={s.cardTitle}>Recent Activity</h2>
+                      <p style={s.cardSubtitle}>Latest 5 document operations</p>
+                    </div>
                   </div>
                   <Link href="/documents" style={s.viewAllLink}>
                     <span>View All</span>
@@ -531,9 +687,11 @@ export default function Analytics() {
                   ) : (
                     recentActivities.map((act: any, i: number) => (
                       <div key={act.id || i} style={s.recentRow}>
-                        <div style={s.recentIcon}>✓</div>
+                        <div style={{...s.recentIcon, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b'}}>
+                          <FileCheck size={16} />
+                        </div>
                         <div style={s.recentBody}>
-                          <div style={s.recentTitle}>{act.title || "Document Operation"}</div>
+                          <div style={{...s.recentTitle, fontWeight: 600, color: '#0f172a'}}>{act.title || "Document Operation"}</div>
                           <div style={s.recentType}>{act.type?.replace(/_/g, " ")}</div>
                         </div>
                         <div style={s.recentTime}>
@@ -679,8 +837,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   kpiGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 16,
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+    gap: 20,
+    marginBottom: 24,
   },
   kpiCard: {
     backgroundColor: "#ffffff",

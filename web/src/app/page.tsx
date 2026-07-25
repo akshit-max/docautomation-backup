@@ -3,8 +3,10 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { UploadCloud } from "lucide-react";
 import { createDocument, uploadPDF, generateDoc, createBatch, uploadBatchFile } from "@/lib/api";
 import { ProcessingTimeline } from "@/components/ProcessingTimeline";
+import { ActivityBell } from "@/components/ActivityBell";
 
 const TEMPLATES = [
   { type: "invoice",           title: "Invoice",           description: "GST invoice with line items, payment status and UPI details" },
@@ -125,7 +127,8 @@ export default function Home() {
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
           <span style={s.logoText}>makewithus</span>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <ActivityBell />
           <Link href="/analytics" style={s.docsLink}>
             Analytics
           </Link>
@@ -197,11 +200,13 @@ export default function Home() {
 
         {uploadPhase === "idle" && (
           <>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginBottom: 4 }}>
+            <div style={{ marginBottom: 16, color: "#64748b", background: "#ffffff", padding: 12, borderRadius: 50, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <UploadCloud size={24} />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", marginBottom: 6 }}>
               Drop a PDF or image here, or click to browse
             </div>
-            <div style={{ fontSize: 12, color: "#aaa" }}>
+            <div style={{ fontSize: 13, color: "#64748b" }}>
               Supports PDF, JPG, PNG, and WebP. AI extracts and structures the content automatically.
             </div>
           </>
@@ -226,52 +231,56 @@ export default function Home() {
 const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#f7f7f7",
+    background: "#f8fafc",
     fontFamily: "system-ui,-apple-system,sans-serif",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    padding: "0 24px 60px",
+    padding: "0 24px",
+    overflow: "hidden"
   },
   header: {
     width: "100%",
-    maxWidth: 860,
+    maxWidth: 960,
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "20px 0",
+    padding: "16px 0",
   },
-  logo: { display: "flex", alignItems: "center", gap: 8 },
-  logoText: { fontSize: 16, fontWeight: 700, color: "#111", letterSpacing: "-0.3px", fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  logo: { display: "flex", alignItems: "center", gap: 10 },
+  logoText: { fontSize: 18, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.5px", fontFamily: '"TT Hoves", system-ui, sans-serif' },
   docsLink: {
-    fontSize: 13, fontWeight: 600, color: "#555", textDecoration: "none",
-    padding: "6px 14px", borderRadius: 4, border: "1px solid #e0e0e0", background: "#fff",
+    fontSize: 13, fontWeight: 600, color: "#475569", textDecoration: "none",
+    padding: "8px 16px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff",
+    transition: "background 0.2s"
   },
   docsLinkBlack: {
     fontSize: 13, fontWeight: 600, color: "#fff", textDecoration: "none",
-    padding: "6px 14px", borderRadius: 4, border: "1px solid #111", background: "#111",
+    padding: "8px 16px", borderRadius: 6, border: "1px solid #0f172a", background: "#0f172a",
+    transition: "opacity 0.2s"
   },
-  hero: { textAlign: "center", padding: "48px 0 36px" },
-  heroTitle: { fontSize: 34, fontWeight: 700, color: "#111", margin: 0, letterSpacing: "-0.5px", fontFamily: '"TT Hoves", system-ui, sans-serif' },
-  heroSub: { fontSize: 15, color: "#888", marginTop: 10, fontWeight: 400 },
+  hero: { textAlign: "center", padding: "32px 0 24px" },
+  heroTitle: { fontSize: 36, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-1px", fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  heroSub: { fontSize: 15, color: "#64748b", marginTop: 8, fontWeight: 400 },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-    gap: 20,
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 16,
     width: "100%",
-    maxWidth: 860,
+    maxWidth: 960,
   },
   card: {
     background: "#ffffff",
-    border: "1.5px solid #e8e8e8",
-    borderRadius: 4,
+    border: "1px solid #e2e8f0",
+    borderRadius: 12,
     padding: "20px",
     cursor: "pointer",
     textAlign: "left",
     display: "flex",
     flexDirection: "column",
-    gap: 10,
-    transition: "box-shadow .15s, border-color .15s",
+    gap: 8,
+    transition: "box-shadow .2s, border-color .2s",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
     outline: "none",
   },
   cardLoading: {
@@ -279,28 +288,29 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center", gap: 10, minHeight: 80,
   },
   spinner: {
-    width: 24, height: 24, border: "2.5px solid #eee", borderTopColor: "#111",
+    width: 24, height: 24, border: "2.5px solid #e2e8f0", borderTopColor: "#0f172a",
     borderRadius: "50%", animation: "spin .8s linear infinite",
   },
-  cardTitle: { fontSize: 17, fontWeight: 700, color: "#111", fontFamily: '"TT Hoves", system-ui, sans-serif' },
-  cardDesc: { fontSize: 13, color: "#888", lineHeight: 1.5 },
+  cardTitle: { fontSize: 16, fontWeight: 700, color: "#0f172a", fontFamily: '"TT Hoves", system-ui, sans-serif', letterSpacing: "-0.3px" },
+  cardDesc: { fontSize: 13, color: "#64748b", lineHeight: 1.4 },
   cardTag: {
-    alignSelf: "flex-start", fontSize: 13, fontWeight: 600,
-    padding: "3px 10px", borderRadius: 4, background: "#f0f0f0", color: "#555",
+    alignSelf: "flex-start", fontSize: 12, fontWeight: 600,
+    padding: "4px 12px", borderRadius: 6, background: "#f8fafc", color: "#334155",
+    border: "1px solid #e2e8f0", marginTop: "auto"
   },
   divider: {
-    display: "flex", alignItems: "center", width: "100%", maxWidth: 860,
-    gap: 16, margin: "32px 0 24px",
+    display: "flex", alignItems: "center", width: "100%", maxWidth: 960,
+    gap: 16, margin: "24px 0 16px",
   },
-  dividerText: { fontSize: 12, color: "#bbb", whiteSpace: "nowrap" },
+  dividerText: { fontSize: 13, color: "#94a3b8", whiteSpace: "nowrap", fontWeight: 500 },
   dropzone: {
     width: "100%",
-    maxWidth: 860,
+    maxWidth: 960,
     borderWidth: "2px",
     borderStyle: "dashed",
-    borderColor: "#ddd",
-    borderRadius: 4,
-    padding: "40px 24px",
+    borderColor: "#cbd5e1",
+    borderRadius: 12,
+    padding: "32px 24px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -308,11 +318,12 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     transition: "border-color .15s, background .15s",
     textAlign: "center",
+    background: "#f1f5f9"
   },
   uploadError: {
-    marginTop: 12, padding: "10px 16px", background: "#fdecea",
-    border: "1px solid #f5c6c0", borderRadius: 4,
-    fontSize: 13, color: "#c0392b", maxWidth: 860, width: "100%",
+    marginTop: 12, padding: "10px 16px", background: "#fef2f2",
+    border: "1px solid #fecaca", borderRadius: 6,
+    fontSize: 13, color: "#ef4444", maxWidth: 960, width: "100%",
   },
-  hint: { marginTop: 32, fontSize: 13, color: "#aaa", textAlign: "center" },
+  hint: { marginTop: 16, fontSize: 12, color: "#94a3b8", textAlign: "center", fontWeight: 500 },
 };
