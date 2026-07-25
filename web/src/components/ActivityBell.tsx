@@ -13,7 +13,10 @@ import {
   Download, 
   Bell, 
   ArrowRight,
-  FileText
+  FileText,
+  Tag,
+  Star,
+  StickyNote
 } from 'lucide-react';
 
 const CATEGORIES = ['All', 'Documents', 'AI', 'Versions', 'Export'] as const;
@@ -97,6 +100,16 @@ export function ActivityBell() {
         return <MessageSquare size={15} color="#475569" />;
       case 'DOCUMENT_EXPORTED':
         return <Download size={15} color="#475569" />;
+      case 'STATUS_CHANGED':
+        return <Tag size={15} color="#475569" />;
+      case 'TAG_ADDED':
+      case 'TAG_REMOVED':
+        return <Tag size={15} color="#475569" />;
+      case 'FAVORITED':
+      case 'UNFAVORITED':
+        return <Star size={15} color="#eab308" />;
+      case 'NOTES_UPDATED':
+        return <StickyNote size={15} color="#475569" />;
       default:
         return <FileText size={15} color="#475569" />;
     }
@@ -121,6 +134,18 @@ export function ActivityBell() {
         return 'Chat Session Started';
       case 'DOCUMENT_EXPORTED':
         return 'Document Exported';
+      case 'STATUS_CHANGED':
+        return 'Status Changed';
+      case 'TAG_ADDED':
+        return 'Tag Added';
+      case 'TAG_REMOVED':
+        return 'Tag Removed';
+      case 'FAVORITED':
+        return 'Favorited';
+      case 'UNFAVORITED':
+        return 'Unfavorited';
+      case 'NOTES_UPDATED':
+        return 'Notes Updated';
       default:
         return 'Activity Logged';
     }
@@ -227,7 +252,13 @@ export function ActivityBell() {
                     <div style={s.activityMeta}>
                       <div style={s.activityTitle}>{getActivityTitle(act.type)}</div>
                       <div style={s.activitySub} title={act.title || 'Untitled Document'}>
-                        {act.title || 'Untitled Document'}
+                        {act.type === 'STATUS_CHANGED' && act.metadata?.oldStatus && act.metadata?.newStatus
+                          ? `${act.metadata.oldStatus} → ${act.metadata.newStatus}`
+                          : act.type === 'TAG_ADDED' && act.metadata?.tag
+                          ? `Added tag '${act.metadata.tag}'`
+                          : act.type === 'TAG_REMOVED' && act.metadata?.tag
+                          ? `Removed tag '${act.metadata.tag}'`
+                          : (act.title || 'Untitled Document')}
                       </div>
                     </div>
                     <div style={s.timeBadge} title={formatTooltipTime(act.createdAt)}>
