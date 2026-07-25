@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 
 // POST /api/doc/[id]/translate
 // Used by api.js translateDocument(docId, language) which calls this URL with { language }
@@ -81,6 +82,13 @@ ${JSON.stringify(docData?.content || {})}`
       content: translatedContent,
       updatedAt: new Date().toISOString(),
     });
+
+    await ActivityService.logTranslationCompleted(
+      id,
+      docData?.project_name || docData?.title || 'Translated Document',
+      'system',
+      { language: lang, model: openrouterPayload.model }
+    );
 
     return NextResponse.json({ id, content: translatedContent });
   } catch (error) {

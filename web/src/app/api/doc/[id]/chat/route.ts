@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ChatService } from '@/lib/services/chat/ChatService';
+import { adminDb } from '@/lib/firebase-admin';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,6 +11,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
+    }
+
+    if (history.length === 0) {
+      // Best-effort non-blocking activity logging for new chat session
+      adminDb.collection('documents').doc(docId).get().then(snap => {
+        const title = snap.exists ? (snap.data()?.project_name || snap.data()?.title || 'AI Chat Session') : 'AI Chat Session';
+        return ActivityService.logChatSessionStarted(docId, title, 'system', { sessionId });
+      }).catch(console.warn);
     }
 
     // Call ChatService to get the raw OpenRouter SSE stream

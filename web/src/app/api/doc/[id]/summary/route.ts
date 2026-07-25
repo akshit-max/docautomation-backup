@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { AIService } from '@/lib/services/ai/AIService';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 
 // POST /api/doc/[id]/summary
 // Used to generate a summary for a document without persisting it directly.
@@ -29,6 +30,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       documentType,
       structuredContent,
     });
+
+    await ActivityService.logSummaryGenerated(
+      id,
+      docData?.project_name || docData?.title || 'Document Summary',
+      'system',
+      { wordCount: typeof summary === 'string' ? summary.split(/\s+/).length : 0 }
+    );
 
     return NextResponse.json({ summary });
   } catch (error: any) {

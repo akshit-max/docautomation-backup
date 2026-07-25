@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 import path from 'path';
 import fs from 'fs';
 
@@ -70,6 +71,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         });
       }
       data = docData;
+    }
+
+    if (autoprint) {
+      ActivityService.logDocumentExported(
+        id,
+        data?.project_name || data?.title || 'Untitled Document',
+        'system',
+        { exportFormat: 'pdf', projectId: data?.projectId }
+      ).catch(console.warn);
     }
 
     const templateType = data?.template_type || 'developer_doc';

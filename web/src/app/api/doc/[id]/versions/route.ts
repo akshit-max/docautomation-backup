@@ -38,14 +38,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       });
     }
 
-    await ActivityService.logActivity({
-      type: ActivityTypes.VERSION_CREATED,
-      entityType: 'version',
-      entityId: id, // Use the parent document ID so Activity Center links to /doc/{id}
-      title: docData.project_name || 'Untitled',
-      status: 'success',
-      metadata: { reason, versionId: result.version.id }
-    });
+    await ActivityService.logVersionCreated(
+      id,
+      docData.project_name || 'Untitled Document',
+      'system',
+      { reason, versionId: result.version.id }
+    );
 
     return NextResponse.json({ success: true, version: result.version });
   } catch (error) {

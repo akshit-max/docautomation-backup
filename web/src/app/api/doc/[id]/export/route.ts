@@ -23,22 +23,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const content = docData?.content || {};
 
-    // Best-effort activity logging
-    ActivityService.logActivity({
-      type: 'DOCUMENT_EXPORTED',
-      entityType: 'document',
-      entityId: id,
-      title: `Exported document to ${format?.toUpperCase()}`,
-      status: 'success',
-      metadata: { projectId: docData?.projectId }
-    }).catch(console.warn);
+    // Best-effort domain activity logging
+    ActivityService.logDocumentExported(
+      id,
+      docData?.project_name || docData?.title || 'Untitled Document',
+      'system',
+      { exportFormat: format, projectId: docData?.projectId }
+    ).catch(console.warn);
+
+    const templateType = docData?.template_type || 'Document';
+    const rawTitle = docData?.project_name || docData?.title || docData?.subject || `doc_${id}`;
+    const safeTitle = rawTitle.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const baseFilename = `${templateType}_${safeTitle}_${dateStr}`;
 
     if (format === 'json') {
       const jsonStr = ExportService.exportJson(content);
       return new NextResponse(jsonStr, {
         headers: {
           'Content-Type': 'application/json',
-          'Content-Disposition': `attachment; filename="document-${id}.json"`
+          'Content-Disposition': `attachment; filename="${baseFilename}.json"`
         }
       });
     }
@@ -48,7 +52,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return new NextResponse(csvStr, {
         headers: {
           'Content-Type': 'text/csv',
-          'Content-Disposition': `attachment; filename="document-${id}.csv"`
+          'Content-Disposition': `attachment; filename="${baseFilename}.csv"`
         }
       });
     }
@@ -58,7 +62,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return new NextResponse(excelBuf as any, {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'Content-Disposition': `attachment; filename="document-${id}.xlsx"`
+          'Content-Disposition': `attachment; filename="${baseFilename}.xlsx"`
         }
       });
     }

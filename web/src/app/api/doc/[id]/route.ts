@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { calculateTotals, calculateReceiptTotals } from '@/lib/documents';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 
 // Compatibility layer: /api/doc/[id] → maps to /api/documents/[id]
 // The frontend api.js calls /api/doc/:id for GET, PUT, DELETE on single documents.
@@ -65,6 +66,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     await docRef.update(updates);
+
+    await ActivityService.logDocumentUpdated(
+      id,
+      newName || currentData?.project_name || 'Untitled Document',
+      'system'
+    );
 
     return NextResponse.json({ id, ...currentData, ...updates });
   } catch (error) {

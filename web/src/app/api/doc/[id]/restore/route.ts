@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { VersionService } from '@/lib/services/version/VersionService';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,6 +22,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const docData = docSnap.data()!;
 
     const result = await VersionService.restoreVersion(id, versionId, docData);
+
+    await ActivityService.logVersionRestored(
+      id,
+      docData.project_name || 'Untitled Document',
+      'system',
+      { restoredFromVersionId: versionId }
+    );
 
     return NextResponse.json({ 
       success: true, 
