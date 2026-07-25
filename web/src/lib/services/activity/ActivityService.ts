@@ -12,8 +12,16 @@ export const ActivityTypes = {
   VERSION_CREATED: 'VERSION_CREATED',
   VERSION_RESTORED: 'VERSION_RESTORED',
   CHAT_SESSION_STARTED: 'CHAT_SESSION_STARTED',
+  STATUS_CHANGED: 'STATUS_CHANGED',
+  TAG_ADDED: 'TAG_ADDED',
+  TAG_REMOVED: 'TAG_REMOVED',
+  FAVORITED: 'FAVORITED',
+  UNFAVORITED: 'UNFAVORITED',
+  NOTES_UPDATED: 'NOTES_UPDATED',
   BATCH_COMPLETED: 'BATCH_COMPLETED',
   BATCH_FAILED: 'BATCH_FAILED',
+  BATCH_TAGS_ADDED: 'BATCH_TAGS_ADDED',
+  BATCH_STATUS_UPDATED: 'BATCH_STATUS_UPDATED',
 } as const;
 
 export type ActivityType = typeof ActivityTypes[keyof typeof ActivityTypes];
@@ -73,6 +81,48 @@ export class ActivityService {
       });
     } catch (err) {
       console.warn("Activity logging failed", err);
+    }
+  }
+
+  static async logStatusChanged(documentId: string, title: string, oldStatus: string, newStatus: string): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.STATUS_CHANGED,
+        entityType: 'document',
+        entityId: documentId,
+        title: `Status changed to ${newStatus}`,
+        metadata: { oldStatus, newStatus, documentTitle: title }
+      });
+    } catch (error) {
+      console.warn("Failed to log status changed", error);
+    }
+  }
+
+  static async logBatchStatusUpdated(count: number, newStatus: string): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.BATCH_STATUS_UPDATED,
+        entityType: 'batch',
+        entityId: `batch_status_${Date.now()}`,
+        title: `Updated status to ${newStatus} for ${count} documents`,
+        metadata: { newStatus, count }
+      });
+    } catch (error) {
+      console.warn("Failed to log batch status updated", error);
+    }
+  }
+
+  static async logBatchTagsAdded(count: number, tags: string[]): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.BATCH_TAGS_ADDED,
+        entityType: 'batch',
+        entityId: `batch_tags_${Date.now()}`,
+        title: `Added ${tags.length} tag(s) to ${count} documents`,
+        metadata: { tags, count }
+      });
+    } catch (error) {
+      console.warn("Failed to log batch tags added", error);
     }
   }
 
@@ -160,6 +210,76 @@ export class ActivityService {
     }
   }
 
+  static async logTagAdded(documentId: string, title: string, tag: string, userId: string = 'system', metadata?: Record<string, any>): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.TAG_ADDED,
+        entityType: 'document',
+        entityId: documentId,
+        title: title || 'Document Tagged',
+        metadata: { userId, tag, ...metadata }
+      });
+    } catch (err) {
+      console.warn("Activity logging failed", err);
+    }
+  }
+
+  static async logTagRemoved(documentId: string, title: string, tag: string, userId: string = 'system', metadata?: Record<string, any>): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.TAG_REMOVED,
+        entityType: 'document',
+        entityId: documentId,
+        title: title || 'Document Untagged',
+        metadata: { userId, tag, ...metadata }
+      });
+    } catch (err) {
+      console.warn("Activity logging failed", err);
+    }
+  }
+
+  static async logFavorited(documentId: string, title: string, userId: string = 'system', metadata?: Record<string, any>): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.FAVORITED,
+        entityType: 'document',
+        entityId: documentId,
+        title: title || 'Document Favorited',
+        metadata: { userId, ...metadata }
+      });
+    } catch (err) {
+      console.warn("Activity logging failed", err);
+    }
+  }
+
+  static async logUnfavorited(documentId: string, title: string, userId: string = 'system', metadata?: Record<string, any>): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.UNFAVORITED,
+        entityType: 'document',
+        entityId: documentId,
+        title: title || 'Document Unfavorited',
+        metadata: { userId, ...metadata }
+      });
+    } catch (err) {
+      console.warn("Activity logging failed", err);
+    }
+  }
+
+  static async logNotesUpdated(documentId: string, title: string, userId: string = 'system', metadata?: Record<string, any>): Promise<void> {
+    try {
+      await this.logActivity({
+        type: ActivityTypes.NOTES_UPDATED,
+        entityType: 'document',
+        entityId: documentId,
+        title: title || 'Document Notes Updated',
+        metadata: { userId, ...metadata }
+      });
+    } catch (err) {
+      console.warn("Activity logging failed", err);
+    }
+  }
+
   /**
    * Retrieves activities ordered by createdAt descending, with optional type filtering and pagination.
    */
@@ -170,7 +290,17 @@ export class ActivityService {
     // Identify allowed types for category filtering
     if (filterCategory && filterCategory !== 'All') {
       if (filterCategory === 'Documents') {
-        allowedTypes = [ActivityTypes.DOCUMENT_CREATED, ActivityTypes.DOCUMENT_UPDATED, ActivityTypes.OCR_COMPLETED];
+        allowedTypes = [
+          ActivityTypes.DOCUMENT_CREATED, 
+          ActivityTypes.DOCUMENT_UPDATED, 
+          ActivityTypes.OCR_COMPLETED, 
+          ActivityTypes.STATUS_CHANGED,
+          ActivityTypes.TAG_ADDED,
+          ActivityTypes.TAG_REMOVED,
+          ActivityTypes.FAVORITED,
+          ActivityTypes.UNFAVORITED,
+          ActivityTypes.NOTES_UPDATED
+        ];
       } else if (filterCategory === 'AI') {
         allowedTypes = [ActivityTypes.TRANSLATION_COMPLETED, ActivityTypes.AI_SUMMARY_GENERATED, ActivityTypes.CHAT_SESSION_STARTED];
       } else if (filterCategory === 'Versions') {

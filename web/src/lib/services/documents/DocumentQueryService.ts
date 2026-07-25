@@ -3,6 +3,9 @@ import { adminDb } from '@/lib/firebase-admin';
 export interface SearchParams {
   q?: string;
   type?: string;
+  status?: string;
+  tag?: string;
+  favorite?: boolean | string;
   client?: string;
   from?: string;
   to?: string;
@@ -26,6 +29,9 @@ export class DocumentQueryService {
     const {
       q,
       type,
+      status,
+      tag,
+      favorite,
       client,
       from,
       to,
@@ -68,8 +74,8 @@ export class DocumentQueryService {
         }
       }
       
-      // If we are filtering by client or 'q' in-memory, fetch a larger batch
-      const fetchLimit = (client || q) ? limit * 5 : limit;
+      // If we are filtering by client, status, tag, favorite, or 'q' in-memory, fetch a larger batch
+      const fetchLimit = (client || status || tag || favorite === 'true' || favorite === true || q) ? limit * 5 : limit;
       finalQuery = finalQuery.limit(fetchLimit);
       
       const snap = await finalQuery.get();
@@ -84,6 +90,29 @@ export class DocumentQueryService {
         resultDocs = resultDocs.filter((doc: any) => {
            const docClient = doc.content?.client_name || '';
            return docClient.toLowerCase().includes(clientLower);
+        });
+      }
+
+      // In-memory status filtering (treating missing status as Draft)
+      if (status && status !== 'all') {
+        resultDocs = resultDocs.filter((doc: any) => {
+          const docStatus = doc.status ?? 'Draft';
+          return docStatus === status;
+        });
+      }
+
+      // In-memory tag filtering
+      if (tag) {
+        resultDocs = resultDocs.filter((doc: any) => {
+          const docTags: string[] = doc.tags || [];
+          return docTags.some(t => t.toLowerCase() === tag.toLowerCase());
+        });
+      }
+
+      // In-memory favorite filtering
+      if (favorite === 'true' || favorite === true) {
+        resultDocs = resultDocs.filter((doc: any) => {
+          return doc.isFavorite === true;
         });
       }
 

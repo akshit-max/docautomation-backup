@@ -185,6 +185,35 @@ export class AnalyticsService {
     const sortedDays = Object.entries(dayCounts).sort((a, b) => b[1] - a[1]);
     const peakActivity = sortedDays.length > 0 ? sortedDays.slice(0, 2).map(d => `${d[0]}s`).join(' & ') : 'Weekdays';
 
+    // 6. Organization Features (Sprint v1.3)
+    const statusCounts: Record<string, number> = {};
+    const tagCounts: Record<string, number> = {};
+    let favoriteCount = 0;
+
+    allDocs.forEach((d: any) => {
+      const status = d.status ?? 'Draft';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+
+      if (d.isFavorite === true) {
+        favoriteCount += 1;
+      }
+
+      if (Array.isArray(d.tags)) {
+        d.tags.forEach((tag: string) => {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        });
+      }
+    });
+
+    const statusDistribution = Object.entries(statusCounts)
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const topTags = Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     return {
       overview: { totalDocuments, createdToday, failedCount, avgProcessingTime },
       batches: { completed: totalDocuments, failed: failedCount },
@@ -200,6 +229,11 @@ export class AnalyticsService {
         topTemplate,
         topExport,
         peakActivity
+      },
+      organization: {
+        statusDistribution,
+        topTags,
+        favoriteCount
       }
     };
   }
