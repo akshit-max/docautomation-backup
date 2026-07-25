@@ -157,9 +157,9 @@ export default function Analytics() {
     <div style={s.page}>
       <Header />
 
-      <div style={s.wrap}>
+      <div className="analytics-wrap" style={s.wrap}>
         {/* ── Title Header & Refresh ── */}
-        <div style={s.topBar}>
+        <div className="analytics-title-row" style={s.topBar}>
           <div>
             <h1 style={s.title}>Analytics Dashboard</h1>
             <p style={s.subtitle}>Operational insights across your document workspace.</p>
@@ -183,11 +183,11 @@ export default function Analytics() {
         {loading ? (
           /* ── Skeleton Grid ── */
           <div style={s.skeletonGrid}>
-            <div style={s.skeletonRow4}>
+            <div className="analytics-stats-grid3" style={s.skeletonRow4}>
               {[1, 2, 3, 4].map(i => <div key={i} style={s.skeletonCard} />)}
             </div>
             <div style={{ ...s.skeletonCard, height: 280 }} />
-            <div style={s.skeletonRow2}>
+            <div className="analytics-grid-row2" style={s.skeletonRow2}>
               <div style={{ ...s.skeletonCard, height: 260 }} />
               <div style={{ ...s.skeletonCard, height: 260 }} />
             </div>
@@ -280,8 +280,9 @@ export default function Analytics() {
                 </div>
               </div>
 
-              <div style={s.chartContainer}>
-                {trendData.map((t: any, idx: number) => {
+              <div className="analytics-chart-container" style={{ overflowX: 'auto', width: '100%' }}>
+                <div className="analytics-chart-wrapper" style={s.chartContainer}>
+                  {trendData.map((t: any, idx: number) => {
                   const uVal = t.uploads || 0;
                   const gVal = t.generated || 0;
                   const h1 = uVal > 0 ? Math.max(18, Math.round((uVal / maxTrendVal) * 180)) : 4;
@@ -320,11 +321,12 @@ export default function Analytics() {
                     </div>
                   );
                 })}
+                </div>
               </div>
             </div>
 
             {/* ── 2-Column Grid Row 1: Templates & Status ── */}
-            <div style={s.gridRow2}>
+            <div className="analytics-grid-row2" style={s.gridRow2}>
 
               {/* ── 3. Documents by Template (Donut Chart) ── */}
               <div style={s.sectionCard}>
@@ -338,7 +340,7 @@ export default function Analytics() {
                   </div>
                 </div>
 
-                <div style={s.donutContainer}>
+                <div className="analytics-donut-container" style={s.donutContainer}>
                   {/* Visual CSS Conic Gradient Donut */}
                   <div style={s.donutWrapper}>
                     <div
@@ -426,7 +428,7 @@ export default function Analytics() {
             </div>
 
             {/* ── 2-Column Grid Row 2: AI Usage & Export Statistics ── */}
-            <div style={s.gridRow2}>
+            <div className="analytics-grid-row2" style={s.gridRow2}>
 
               {/* ── 5. AI Usage ── */}
               <div style={s.sectionCard}>
@@ -440,7 +442,7 @@ export default function Analytics() {
                   </div>
                 </div>
 
-                <div style={s.statsGrid3}>
+                <div className="analytics-stats-grid3" style={s.statsGrid3}>
                   <div style={s.statMiniCard}>
                     <div style={s.statMiniHeader}>
                       <Sparkles size={16} color="#0f172a" />
@@ -540,7 +542,7 @@ export default function Analytics() {
             </div>
 
             {/* ── 2-Column Grid Row 3: Organization & Classification ── */}
-            <div style={s.gridRow2}>
+            <div className="analytics-grid-row2" style={s.gridRow2}>
               {/* ── 7. Status Distribution ── */}
               <div style={s.sectionCard}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -604,7 +606,7 @@ export default function Analytics() {
             </div>
 
             {/* ── 2-Column Grid Row 4: Insights Panel ⭐ & Recent Activity ── */}
-            <div style={s.gridRow2}>
+            <div className="analytics-grid-row2" style={s.gridRow2}>
 
               {/* ── 7. Insights Panel ⭐ ── */}
               <div style={{ ...s.sectionCard, background: "#ffffff" }}>
@@ -714,7 +716,7 @@ export default function Analytics() {
 
 function Header() {
   return (
-    <div style={s.header}>
+    <div className="analytics-header" style={s.header}>
       <div style={s.headerLeft}>
         <Link href="/documents" style={s.logoLink}>
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />

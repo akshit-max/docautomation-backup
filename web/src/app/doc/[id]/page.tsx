@@ -365,11 +365,11 @@ export default function DocumentEditor() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: '#f8fafc', overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
+    <div className="editor-wrapper" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: '#f8fafc', overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
       
       {/* === Topbar === */}
-      <div style={s.topbar}>
-        <div style={s.topLeft}>
+      <div className="editor-topbar" style={s.topbar}>
+        <div className="editor-top-left" style={s.topLeft}>
           <span 
             style={{...s.docName, cursor: "pointer"}} 
             title="Click to rename"
@@ -420,14 +420,14 @@ export default function DocumentEditor() {
             </select>
             <ChevronDown size={14} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#666' }} />
           </div>
-
+ 
           <TagEditor documentId={id} initialTags={doc.tags || []} />
           <NotesPanel documentId={id} initialNotes={doc.notes || ""} />
-
+ 
           {dirty && <span style={s.unsavedDot} title="Unsaved changes" />}
         </div>
-
-        <div style={s.topRight}>
+ 
+        <div className="editor-top-right" style={s.topRight}>
           {dirty && (
             <button
               style={saving ? s.btnSavingDisabled : s.btnSave}
@@ -488,9 +488,9 @@ export default function DocumentEditor() {
       </div>
 
       {/* === Main layout === */}
-      <div style={s.panels}>
+      <div className="editor-panels" style={s.panels}>
         {/* === Left prompt / voice column === */}
-        <div style={s.promptBox}>
+        <div className="editor-prompt-box" style={s.promptBox}>
           
           {/* Card 1: AI Prompt Fill */}
           <div style={s.card}>
@@ -611,7 +611,7 @@ export default function DocumentEditor() {
 
         {/* === Left fields panel === */}
         {panelOpen && !previewVersion && (
-          <div style={s.leftPanel}>
+          <div className="editor-left-panel" style={s.leftPanel}>
             <div style={s.panelHeader}>
               <span style={s.panelTitle}>Edit content</span>
               <span style={s.panelSubtitle}>{TYPE_LABELS[doc.template_type] || doc.template_type}</span>
@@ -639,7 +639,7 @@ export default function DocumentEditor() {
         )}
 
         {/* === Right preview === */}
-        <div style={s.rightPanel}>
+        <div className="editor-right-panel" style={s.rightPanel}>
           <DocumentPreview 
             url={previewRouteUrl(id, previewVersion?.id)}
             onDownload={handleDownloadPDF}

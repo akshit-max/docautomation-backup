@@ -214,7 +214,7 @@ export default function Documents() {
   return (
     <div style={s.page}>
       {/* ── Header ── */}
-      <div style={s.header}>
+      <div className="docs-header" style={s.header}>
         <div style={s.headerLeft}>
           <Link href="/" style={s.logoLink}>
             <AsteriskIcon size={22} />
@@ -228,7 +228,7 @@ export default function Documents() {
         </div>
       </div>
 
-      <div style={s.wrap}>
+      <div className="docs-wrap" style={s.wrap}>
         <div style={s.pageHeader}>
           <h1 style={s.pageTitle}>Your Documents</h1>
           <p style={s.pageSubtitle}>View, manage, and track the status of all your generated documents</p>
@@ -237,7 +237,7 @@ export default function Documents() {
         {/* ── Search + Filter bar ── */}
         <div style={s.toolbar}>
           {/* Top Row: Search and Favorites Only */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div className="docs-toolbar-row1" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <div style={s.searchWrap}>
               <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: 14 }} />
               <input
@@ -259,11 +259,12 @@ export default function Documents() {
           </div>
 
           {/* Bottom Row: Tabs and Filters */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            <div style={s.segmentedControl}>
+          <div className="docs-toolbar-row2" style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div className="docs-segmented-control" style={s.segmentedControl}>
               {["all", "invoice", "receipt_template", "client_doc", "compliance", "timeline"].map((f) => (
                 <button
                   key={f}
+                  className="docs-segmented-btn"
                   style={{ ...s.segmentedBtn, ...(filterType === f ? s.segmentedBtnActive : {}) }}
                   onClick={() => setFilterType(f)}
                 >
@@ -272,8 +273,9 @@ export default function Documents() {
               ))}
             </div>
             
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div className="docs-filter-group" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <select
+                className="docs-filter-select"
                 style={{ ...s.filterSelect, appearance: 'auto' } as React.CSSProperties}
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
@@ -285,6 +287,7 @@ export default function Documents() {
               </select>
               
               <input
+                className="docs-filter-input"
                 style={s.filterInput as React.CSSProperties}
                 type="text"
                 placeholder="Filter by Client..."
@@ -292,6 +295,7 @@ export default function Documents() {
                 onChange={(e) => setFilterClient(e.target.value)}
               />
               <input
+                className="docs-filter-input"
                 style={s.filterInput as React.CSSProperties}
                 type="text"
                 placeholder="Filter by Tag..."
@@ -341,7 +345,7 @@ export default function Documents() {
 
         {/* ── Documents grid ── */}
         {!loading && docs.length > 0 && (
-          <div style={s.grid}>
+          <div className="docs-grid" style={s.grid}>
             {docs.map(doc => {
               const meta = TYPE_META[doc.template_type] || { label: doc.template_type, icon: "📄", bg: "#f0f0f0", color: "#666" };
               return (

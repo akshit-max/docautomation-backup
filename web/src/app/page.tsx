@@ -122,12 +122,12 @@ export default function Home() {
   return (
     <div style={s.page}>
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div style={s.header}>
-        <div style={s.logo}>
+      <div className="home-header" style={s.header}>
+        <div className="home-header-logo" style={s.logo}>
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
           <span style={s.logoText}>makewithus</span>
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div className="home-header-actions" style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <ActivityBell />
           <Link href="/analytics" style={s.docsLink}>
             Analytics
@@ -139,15 +139,15 @@ export default function Home() {
       </div>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <div style={s.hero}>
-        <h1 style={s.heroTitle}>Create a document</h1>
+      <div className="home-hero" style={s.hero}>
+        <h1 className="home-hero-title" style={s.heroTitle}>Create a document</h1>
         <p style={s.heroSub}>
           Choose a template → write one prompt → AI fills everything instantly
         </p>
       </div>
 
       {/* ── Template cards ──────────────────────────────────────── */}
-      <div style={s.grid}>
+      <div className="home-grid" style={s.grid}>
         {TEMPLATES.map((t) => (
           <button
             key={t.type}
@@ -178,6 +178,7 @@ export default function Home() {
 
       {/* ── Upload / OCR zone ───────────────────────────────────── */}
       <div
+        className="home-dropzone"
         style={{
           ...s.dropzone,
           borderColor: dragOver ? "#111" : "#ddd",
