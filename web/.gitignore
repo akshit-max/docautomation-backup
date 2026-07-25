@@ -41,3 +41,4 @@ next-env.d.ts
 
 # debug scripts
 test_req.py
+test.js
