@@ -56,11 +56,11 @@ Text to classify:
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      
+
       const data = await response.json();
       const contentStr = data?.choices?.[0]?.message?.content || '';
       const type = contentStr.trim().toLowerCase();
-      
+
       const validTypes = ['receipt_template', 'developer_doc', 'client_doc', 'compliance', 'invoice', 'timeline'];
       const matchedType = validTypes.find(v => type.includes(v));
 
@@ -212,9 +212,9 @@ ${rawInput}
       temperature: 0.1,
       max_tokens: 150,
       messages: [
-        { 
-          role: 'system', 
-          content: 'You are an AI assistant that writes concise document summaries.' 
+        {
+          role: 'system',
+          content: 'You are an AI assistant that writes concise document summaries.'
         },
         {
           role: 'user',
@@ -254,7 +254,7 @@ ${JSON.stringify(params.structuredContent, null, 2)}`
       console.error('OpenRouter API Error:', aiData.error);
       throw new Error(`OpenRouter Error: ${aiData.error.message || 'Unknown error'}`);
     }
-    
+
     return aiData.choices?.[0]?.message?.content?.trim() || '';
   }
 }
