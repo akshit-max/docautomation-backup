@@ -52,6 +52,9 @@ ${JSON.stringify(schema, null, 2)}`
       ]
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -61,12 +64,19 @@ ${JSON.stringify(schema, null, 2)}`
         'X-Title': 'Doc Automation',
       },
       body: JSON.stringify(openrouterPayload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenRouter API error on refill:', errorText);
-      return NextResponse.json({ error: 'AI generation failed' }, { status: 500 });
+      let parsedMsg = errorText;
+      try {
+        const parsed = JSON.parse(errorText);
+        if (parsed.error?.message) parsedMsg = parsed.error.message;
+      } catch {}
+      return NextResponse.json({ error: `AI generation failed: ${parsedMsg}` }, { status: 500 });
     }
 
     const aiData = await response.json();

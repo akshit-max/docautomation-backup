@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const openrouterPayload = {
-      model: 'anthropic/claude-sonnet-4',
+      model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
       max_tokens: 3000,
       temperature: 0.3,
       messages: [{
@@ -38,6 +38,9 @@ ${JSON.stringify(docData?.content || {})}`
       }]
     };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -47,12 +50,19 @@ ${JSON.stringify(docData?.content || {})}`
         'X-Title': 'Doc Automation',
       },
       body: JSON.stringify(openrouterPayload),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errBody = await response.text();
       console.error('OpenRouter API error on translate:', errBody);
-      return NextResponse.json({ error: 'Translation failed' }, { status: 500 });
+      let parsedMsg = errBody;
+      try {
+        const parsed = JSON.parse(errBody);
+        if (parsed.error?.message) parsedMsg = parsed.error.message;
+      } catch {}
+      return NextResponse.json({ error: `Translation failed: ${parsedMsg}` }, { status: 500 });
     }
 
     const aiData = await response.json();
