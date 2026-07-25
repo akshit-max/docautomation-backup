@@ -244,10 +244,17 @@ ${JSON.stringify(params.structuredContent, null, 2)}`
     });
 
     if (!response.ok) {
-      throw new Error('AI summary generation failed');
+      const errorText = await response.text();
+      console.error('OpenRouter API error on summary:', errorText);
+      throw new Error(`AI summary generation failed: ${errorText}`);
     }
 
     const aiData = await response.json();
-    return aiData.choices[0]?.message?.content?.trim() || '';
+    if (aiData.error) {
+      console.error('OpenRouter API Error:', aiData.error);
+      throw new Error(`OpenRouter Error: ${aiData.error.message || 'Unknown error'}`);
+    }
+    
+    return aiData.choices?.[0]?.message?.content?.trim() || '';
   }
 }

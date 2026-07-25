@@ -40,9 +40,10 @@ export class DocumentQueryService {
     if (type && type !== 'all') {
       baseQuery = baseQuery.where('template_type', '==', type);
     }
-    if (client) {
-      baseQuery = baseQuery.where('content.client_name', '==', client);
-    }
+    // We REMOVED the content.client_name Firestore filter here.
+    // Doing it in Firestore requires a unique composite index for every combination of filters.
+    // We will do it in-memory instead.
+    
     if (from) {
       baseQuery = baseQuery.where('createdAt', '>=', from);
     }
@@ -50,15 +51,8 @@ export class DocumentQueryService {
       baseQuery = baseQuery.where('createdAt', '<=', to);
     }
 
-    // Apply sorting
-    if (!q) {
-      // If no prefix search, we sort by the requested field
-      baseQuery = baseQuery.orderBy(sort, order);
-    } else {
-      // If we have a prefix search, Firestore REQUIRES the first orderBy to be the field with the inequality filter.
-      // So we cannot sort by `createdAt` if we are searching by `project_name` natively via query unless they are the same.
-      // However, the fallback logic will handle ordering the fields appropriately.
-    }
+    // Always apply sorting to the base query now that we don't have Firestore inequality constraints
+    baseQuery = baseQuery.orderBy(sort, order);
 
     let docs: any[] = [];
     let nextCursor: string | null = null;
@@ -68,69 +62,58 @@ export class DocumentQueryService {
     const executeQuery = async (query: any) => {
       let finalQuery = query;
       if (cursor) {
-        // Since cursor is the document ID in this simple implementation, we can fetch the doc snap.
-        // But passing doc ID alone requires us to fetch the doc snap first.
         const cursorDoc = await adminDb.collection('documents').doc(cursor).get();
         if (cursorDoc.exists) {
           finalQuery = finalQuery.startAfter(cursorDoc);
         }
       }
-      finalQuery = finalQuery.limit(limit);
+      
+      // If we are filtering by client or 'q' in-memory, fetch a larger batch
+      const fetchLimit = (client || q) ? limit * 5 : limit;
+      finalQuery = finalQuery.limit(fetchLimit);
+      
       const snap = await finalQuery.get();
       
       if (snap.empty) return { docs: [], nextCursor: null, hasMore: false };
 
-      const resultDocs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-      const hasMoreResults = snap.docs.length === limit;
-      const nextC = hasMoreResults ? snap.docs[snap.docs.length - 1].id : null;
+      let resultDocs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       
-      // If we did a prefix search, the result won't be ordered by `sort` param automatically
-      // because Firestore forces order by the inequality field. We can do an in-memory sort here.
-      if (q) {
-         resultDocs.sort((a: any, b: any) => {
-           const valA = a[sort] || '';
-           const valB = b[sort] || '';
-           if (valA < valB) return order === 'asc' ? -1 : 1;
-           if (valA > valB) return order === 'asc' ? 1 : -1;
-           return 0;
-         });
+      // In-memory client filtering
+      if (client) {
+        const clientLower = client.toLowerCase();
+        resultDocs = resultDocs.filter((doc: any) => {
+           const docClient = doc.content?.client_name || '';
+           return docClient.toLowerCase().includes(clientLower);
+        });
       }
 
-      return { docs: resultDocs, nextCursor: nextC, hasMore: hasMoreResults };
+      // In-memory global search (q) filtering
+      if (q) {
+        const qLower = q.toLowerCase();
+        resultDocs = resultDocs.filter((doc: any) => {
+           const projName = (doc.project_name || '').toLowerCase();
+           const clientName = (doc.content?.client_name || '').toLowerCase();
+           const invoiceNum = (doc.content?.invoice_number || '').toLowerCase();
+           const title = (doc.content?.title || '').toLowerCase();
+           return projName.includes(qLower) || 
+                  clientName.includes(qLower) || 
+                  invoiceNum.includes(qLower) || 
+                  title.includes(qLower);
+        });
+      }
+
+      // Trim results to requested limit
+      const trimmedDocs = resultDocs.slice(0, limit);
+      const hasMoreResults = resultDocs.length > limit;
+      const nextC = hasMoreResults ? trimmedDocs[trimmedDocs.length - 1]?.id : null;
+      
+      return { docs: trimmedDocs, nextCursor: nextC, hasMore: hasMoreResults };
     };
 
-    if (q) {
-      const searchTerm = q; // keep original case for case-sensitive DBs, though prefix is usually case-sensitive in Firestore.
-      
-      // We will try fields in order: project_name, content.client_name, content.invoice_number, content.title
-      const searchFields = [
-        'project_name',
-        'content.client_name',
-        'content.invoice_number',
-        'content.title'
-      ];
-
-      for (const field of searchFields) {
-        let qQuery = baseQuery
-          .where(field, '>=', searchTerm)
-          .where(field, '<=', searchTerm + '\uf8ff')
-          .orderBy(field, 'asc'); // Firestore requires this
-
-        const result = await executeQuery(qQuery);
-        if (result.docs.length > 0) {
-          docs = result.docs;
-          nextCursor = result.nextCursor;
-          hasMore = result.hasMore;
-          break; // Stop at the first field that yields results
-        }
-      }
-    } else {
-      // Normal fetch without search term
-      const result = await executeQuery(baseQuery);
-      docs = result.docs;
-      nextCursor = result.nextCursor;
-      hasMore = result.hasMore;
-    }
+    const result = await executeQuery(baseQuery);
+    docs = result.docs;
+    nextCursor = result.nextCursor;
+    hasMore = result.hasMore;
 
     return { documents: docs, nextCursor, hasMore };
   }
