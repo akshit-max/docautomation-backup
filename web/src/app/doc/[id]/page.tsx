@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEditorState, previewRouteUrl } from "@/hooks/useEditorState";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
@@ -18,8 +17,9 @@ import { AiValidationPanel } from "@/components/editor/AiValidationPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { DocumentPreview } from "@/components/editor/DocumentPreview";
 import { saveVersion } from "@/lib/api";
-import { Clock, MessageSquareText, Sparkles, Languages, Maximize, Download, Share2, ExternalLink, Save, Play, Mic, ChevronDown, FileText, FileCode, FileSpreadsheet } from "lucide-react";
+import { Clock, MessageSquareText, Languages, Download, Share2, ExternalLink, Save, Play, Mic, ChevronDown, FileText, FileCode, FileSpreadsheet, Loader2, Sparkles } from "lucide-react";
 import ChatPanel from "./ChatPanel";
+import { notify } from "@/lib/notify";
 
 const TYPE_LABELS: Record<string, string> = {
   receipt_template: "Receipt Template",
@@ -209,14 +209,60 @@ export default function DocumentEditor() {
     return missing;
   };
 
-  const handleDownloadPDF = () => {
+  const handleExport = async (format: 'pdf' | 'json' | 'csv' | 'excel') => {
     const missing = getMissingFields();
     if (missing.length > 0) {
-      alert(`Please fill in the following required fields before downloading:\n- ${missing.join('\n- ')}`);
+      alert(`Please fill in the following required fields before exporting:\n- ${missing.join('\n- ')}`);
       return;
     }
-    window.open(`/api/doc/${id}/preview?autoprint=1`, "_blank");
+
+    const formatUpper = format.toUpperCase();
+    const toastId = notify.loading(`⏳ Exporting ${formatUpper}...`);
+
+    try {
+      if (format === 'pdf') {
+        setTimeout(() => {
+          window.open(`/api/doc/${id}/preview?autoprint=1`, "_blank");
+          notify.success(`✅ PDF exported successfully.`, { id: toastId });
+        }, 600);
+        return;
+      }
+
+      const res = await fetch(`/api/doc/${id}/export?format=${format}`);
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+
+      const disp = res.headers.get('Content-Disposition');
+      let filename = `export_${id}.${format === 'excel' ? 'xlsx' : format}`;
+      if (disp && disp.includes('filename=')) {
+        const match = disp.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      } else {
+        const templateType = doc?.template_type || 'Document';
+        const rawTitle = doc?.project_name || doc?.title || doc?.subject || `doc_${id}`;
+        const safeTitle = rawTitle.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+        const dateStr = new Date().toISOString().split('T')[0];
+        filename = `${templateType}_${safeTitle}_${dateStr}.${format === 'excel' ? 'xlsx' : format}`;
+      }
+
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      notify.success(`✅ ${formatUpper} exported successfully.`, { id: toastId });
+    } catch (err: any) {
+      console.error(`Error exporting ${format}:`, err);
+      notify.error(`⚠️ Failed to export ${formatUpper}: ${err.message || 'Server error'}`, { id: toastId });
+    }
   };
+
+  const handleDownloadPDF = () => handleExport('pdf');
 
   const handleSaveSnapshot = async () => {
     const reason = await window.prompt("Enter a reason for this snapshot (optional):", "Manual Save");
@@ -318,18 +364,18 @@ export default function DocumentEditor() {
               <>
                 <div style={s.dropdownOverlay} onClick={() => setExportOpen(false)} />
                 <div style={s.dropdownMenu}>
-                  <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleDownloadPDF(); }}>
-                    <FileText size={15} color="#475569" /> Export as PDF
+                  <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleExport('pdf'); }}>
+                    <FileText size={15} color="#e11d48" /> Export as PDF Document
                   </button>
-                  <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=json`} download onClick={() => setExportOpen(false)}>
-                    <FileCode size={15} color="#475569" /> Export as JSON
-                  </a>
-                  <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=csv`} download onClick={() => setExportOpen(false)}>
-                    <FileText size={15} color="#475569" /> Export as CSV
-                  </a>
-                  <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=excel`} download onClick={() => setExportOpen(false)}>
-                    <FileSpreadsheet size={15} color="#475569" /> Export as Excel
-                  </a>
+                  <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleExport('json'); }}>
+                    <FileCode size={15} color="#2563eb" /> Export as JSON Payload
+                  </button>
+                  <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleExport('csv'); }}>
+                    <FileText size={15} color="#d97706" /> Export as CSV Table
+                  </button>
+                  <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleExport('excel'); }}>
+                    <FileSpreadsheet size={15} color="#16a34a" /> Export as Excel Sheet
+                  </button>
                 </div>
               </>
             )}
@@ -386,7 +432,12 @@ export default function DocumentEditor() {
               onClick={handlePromptRefill}
               disabled={generating || !prompt.trim()}
             >
-              <Play size={14} style={{ marginRight: 6 }} /> {generating ? "Generating..." : "Generate"}
+              {generating ? (
+                <Loader2 size={14} style={{ marginRight: 6, animation: "spin 1s linear infinite" }} />
+              ) : (
+                <FileText size={14} style={{ marginRight: 6 }} />
+              )}
+              {generating ? "Generating..." : "Generate Document"}
             </button>
             
             {!listening && !generating && (
@@ -417,15 +468,6 @@ export default function DocumentEditor() {
                   Stop & fill document
                 </button>
               </>
-            )}
-
-            {generating && (
-              <div style={processingBanner}>
-                <div style={spinnerDot} />
-                <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
-                  Generating content...
-                </span>
-              </div>
             )}
 
             {!listening && !generating && transcript && (
@@ -460,7 +502,12 @@ export default function DocumentEditor() {
               onClick={handleTranslate}
               disabled={translating}
             >
-              <Languages size={14} /> {translating ? "Translating..." : "Translate"}
+              {translating ? (
+                <Loader2 size={14} style={{ marginRight: 6, animation: "spin 1s linear infinite" }} />
+              ) : (
+                <Languages size={14} style={{ marginRight: 6 }} />
+              )}
+              {translating ? "Translating..." : "Translate Document"}
             </button>
           </div>
 
@@ -684,18 +731,19 @@ const s: Record<string, React.CSSProperties> = {
   },
   btnGeneratePurple: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-    width: "100%", fontSize: 13, fontWeight: 600, background: "#1e293b",
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#0f172a",
     color: "#fff", border: "none", borderRadius: 4, padding: "10px 0", cursor: "pointer",
     transition: "background 0.2s"
   },
   btnGeneratingFull: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-    width: "100%", fontSize: 13, fontWeight: 600, background: "#64748b",
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#0f172a",
     color: "#fff", border: "none", borderRadius: 4, padding: "10px 0", cursor: "not-allowed",
+    opacity: 0.75,
   },
   btnOutlinePurple: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-    width: "100%", fontSize: 13, fontWeight: 600, background: "#fff", color: "#1e293b",
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#fff", color: "#0f172a",
     border: "1px solid #e2e8f0", borderRadius: 4, padding: "10px 0", cursor: "pointer",
     boxShadow: "0 1px 2px rgba(0,0,0,0.02)", transition: "background 0.2s"
   },
@@ -765,9 +813,7 @@ const pulseDot: React.CSSProperties = { width: 10, height: 10, borderRadius: "50
 const voiceBtnStart: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 600, color: "#fff", background: "#111", border: "none", borderRadius: 4, padding: "12px 0", cursor: "pointer", transition: "all 0.2s" };
 const voiceBtnStop: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 700, color: "#fff", background: "#e74c3c", border: "none", borderRadius: 4, padding: "12px 0", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 2px 8px rgba(231,76,60,0.35)" };
 const listeningBanner: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, background: "#fdecea", border: "1px solid #f5c6c0", borderRadius: 4, padding: "8px 10px" };
-const processingBanner: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, background: "#f0f0f0", border: "1px solid #e0e0e0", borderRadius: 4, padding: "8px 10px" };
-const spinnerDot: React.CSSProperties = { width: 12, height: 12, borderRadius: "50%", border: "2px solid #ccc", borderTopColor: "#555", animation: "spin 0.7s linear infinite" };
-const manualFillBtn: React.CSSProperties = { marginTop: 8, width: "100%", fontSize: 12, fontWeight: 600, background: "#111", color: "#fff", border: "none", borderRadius: 4, padding: "8px 0", cursor: "pointer" };
+const manualFillBtn: React.CSSProperties = { marginTop: 8, width: "100%", fontSize: 12, fontWeight: 600, background: "#0f172a", color: "#fff", border: "none", borderRadius: 4, padding: "8px 0", cursor: "pointer" };
 
 const translateWrap: React.CSSProperties = {
   padding: "12px 16px", borderTop: "1px solid #f0f0f0", display: "flex",
@@ -780,13 +826,15 @@ const translateSelect: React.CSSProperties = {
 };
 const translateBtn: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-  width: "100%", fontSize: 13, fontWeight: 600, background: "#1e293b", color: "#fff",
+  width: "100%", fontSize: 13, fontWeight: 600, background: "#0f172a", color: "#fff",
   border: "none", borderRadius: 4, padding: "10px 0", cursor: "pointer",
+  transition: "background 0.2s"
 };
 const translateBtnDisabled: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-  width: "100%", fontSize: 13, background: "#94a3b8", color: "#fff",
+  width: "100%", fontSize: 13, fontWeight: 600, background: "#0f172a", color: "#fff",
   border: "none", borderRadius: 4, padding: "10px 0", cursor: "not-allowed",
+  opacity: 0.75,
 };
 
 const modalStyles = {

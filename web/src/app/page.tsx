@@ -14,7 +14,7 @@ const TEMPLATES = [
   { type: "timeline",          title: "Project Timeline",  description: "Phase-wise project timeline with hours and closure date" },
 ];
 
-type UploadPhase = "idle" | "uploading" | "ocr" | "classifying" | "generating" | "saving" | "done";
+type UploadPhase = "idle" | "uploading" | "ocr" | "classifying" | "generating" | "saving" | "done" | "error";
 
 export default function Home() {
   const router = useRouter();
@@ -96,7 +96,7 @@ export default function Home() {
         }, 400);
       }, 100);
     } catch (err: any) {
-      setUploadPhase("idle");
+      setUploadPhase("error");
       setUploadError(
         err?.response?.data?.error || err?.friendlyMessage || "Upload failed."
       );
@@ -115,7 +115,7 @@ export default function Home() {
     }
   };
 
-  const isUploading = uploadPhase !== "idle" && uploadPhase !== "done";
+  const isUploading = uploadPhase !== "idle" && uploadPhase !== "done" && uploadPhase !== "error";
 
   return (
     <div style={s.page}>
@@ -208,13 +208,13 @@ export default function Home() {
         )}
 
         {uploadPhase !== "idle" && (
-          <ProcessingTimeline currentPhase={uploadPhase} />
+          <ProcessingTimeline 
+            currentPhase={uploadPhase} 
+            error={uploadError}
+            onRetry={() => { setUploadError(""); setUploadPhase("idle"); }}
+          />
         )}
       </div>
-
-      {uploadError && (
-        <div style={s.uploadError}>{uploadError}</div>
-      )}
 
       <p style={s.hint}>
         ✦ After selecting, type a prompt in the editor — AI will fill all fields automatically

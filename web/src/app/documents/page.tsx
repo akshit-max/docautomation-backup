@@ -136,7 +136,7 @@ export default function Documents() {
       <div style={s.header}>
         <div style={s.headerLeft}>
           <Link href="/" style={s.logoLink}>
-            <AsteriskIcon size={18} />
+            <AsteriskIcon size={22} />
             <span style={s.logoText}>makewithus</span>
           </Link>
         </div>
