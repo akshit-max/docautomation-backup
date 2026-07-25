@@ -8,6 +8,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q') || undefined;
     const type = searchParams.get('type') || undefined;
+    const status = searchParams.get('status') || undefined;
+    const tag = searchParams.get('tag') || undefined;
+    const favorite = searchParams.get('favorite') || undefined;
     const client = searchParams.get('client') || undefined;
     const from = searchParams.get('from') || undefined;
     const to = searchParams.get('to') || undefined;
@@ -18,7 +21,18 @@ export async function GET(request: Request) {
     const cursor = searchParams.get('cursor') || undefined;
 
     const result = await DocumentQueryService.searchDocuments({
-      q, type, client, from, to, sort, order, limit, cursor
+      q,
+      type,
+      status,
+      tag,
+      favorite,
+      client,
+      from,
+      to,
+      sort,
+      order,
+      limit,
+      cursor
     });
 
     return NextResponse.json(result);

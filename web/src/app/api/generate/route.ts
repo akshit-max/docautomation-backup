@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebase-admin';
 import { generateInvoiceNumber } from '@/lib/db';
 import { SYSTEM_PROMPT, SCHEMAS, calculateTotals, calculateReceiptTotals } from '@/lib/documents';
 import { VersionService } from '@/lib/services/version/VersionService';
+import { DocumentStatus } from '@/lib/constants/document-status';
 
 export async function POST(request: Request) {
   try {
@@ -96,6 +97,10 @@ ${raw_input}
       content,
       html_content: '',
       isDeleted: false,
+      status: DocumentStatus.Draft,
+      tags: [],
+      isFavorite: false,
+      notes: '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
