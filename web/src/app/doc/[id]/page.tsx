@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEditorState, previewRouteUrl } from "@/hooks/useEditorState";
 import { useVoiceRecognition } from "@/hooks/useVoiceRecognition";
-import { translateDocument } from "@/lib/api";
+import { translateDocument, summarizeDocument } from "@/lib/api";
 import TypeBadge from "@/components/editor/TypeBadge";
 import {
   ReceiptFields,
@@ -15,6 +15,11 @@ import {
   TimelineFields,
 } from "@/components/editor/EditorForms";
 import { AiValidationPanel } from "@/components/editor/AiValidationPanel";
+import { HistoryPanel } from "@/components/HistoryPanel";
+import { DocumentPreview } from "@/components/editor/DocumentPreview";
+import { saveVersion } from "@/lib/api";
+import { Clock, MessageSquareText, Sparkles, Languages, Maximize, Download, Share2, ExternalLink, Save, Play, Mic, ChevronDown } from "lucide-react";
+import ChatPanel from "./ChatPanel";
 
 const TYPE_LABELS: Record<string, string> = {
   receipt_template: "Receipt Template",
@@ -76,9 +81,23 @@ export default function DocumentEditor() {
   const [renaming, setRenaming] = useState(false);
   const [renameInput, setRenameInput] = useState("");
 
+  // History state
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<any>(null);
+  const [savingSnapshot, setSavingSnapshot] = useState(false);
+
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+
   // Translation state
   const [selectedLanguage, setSelectedLanguage] = useState("Hindi");
   const [translating, setTranslating] = useState(false);
+
+  // Summary state
+  const [summarizing, setSummarizing] = useState(false);
+
+  // Export state
+  const [exportOpen, setExportOpen] = useState(false);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -133,6 +152,21 @@ export default function DocumentEditor() {
     }
   };
 
+  const handleSummarize = async () => {
+    if (summarizing) return;
+    setSummarizing(true);
+    try {
+      const res = await summarizeDocument(id);
+      if (res.data?.summary) {
+        updateField('summary', res.data.summary);
+      }
+    } catch {
+      alert("Summary generation failed. Please try again.");
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
   const getMissingFields = () => {
     if (!content) return [];
     const missing: string[] = [];
@@ -177,6 +211,27 @@ export default function DocumentEditor() {
     window.open(`/api/doc/${id}/preview?autoprint=1`, "_blank");
   };
 
+  const handleSaveSnapshot = async () => {
+    const reason = await window.prompt("Enter a reason for this snapshot (optional):", "Manual Save");
+    if (reason === null) return;
+    setSavingSnapshot(true);
+    try {
+      // make sure current changes are saved first
+      if (dirty) {
+        await handleSave();
+      }
+      await saveVersion(id, reason || "Manual Save");
+      // if history is open, we need to refresh it. Easiest way is to just let the user see it when they open it,
+      // or we can reload versions if historyOpen is true. We'll let HistoryPanel reload when it mounts.
+      alert("Version saved successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save version.");
+    } finally {
+      setSavingSnapshot(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={s.centerScreen}>
@@ -204,16 +259,24 @@ export default function DocumentEditor() {
   }
 
   return (
-    <div style={s.page}>
-      {/* ── Topbar ─────────────────────────────────────────────── */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: '#f8fafc', overflow: 'hidden', fontFamily: 'system-ui, sans-serif' }}>
+      
+      {/* === Topbar === */}
       <div style={s.topbar}>
         <div style={s.topLeft}>
-          <div style={s.topDivider} />
-          <span style={s.docName} title={content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document"}>
+          <span 
+            style={{...s.docName, cursor: "pointer"}} 
+            title="Click to rename"
+            onClick={() => {
+              const currentName = content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document";
+              setRenameInput(currentName);
+              setRenaming(true);
+            }}
+          >
             {content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document"}
           </span>
           <button
-            style={{ ...s.btnIcon, border: "none", background: "none", padding: "2px", display: "flex", alignItems: "center", cursor: "pointer" }}
+            style={{ border: "none", background: "none", padding: "2px", display: "flex", alignItems: "center", cursor: "pointer" }}
             onClick={() => {
               const currentName = content?.project_name || content?.title || content?.subject || content?.service_name || doc.project_name || "Untitled Document";
               setRenameInput(currentName);
@@ -221,7 +284,7 @@ export default function DocumentEditor() {
             }}
             title="Rename document"
           >
-            <PencilIcon size={14} color="#888" />
+            <PencilIcon size={14} color="#94a3b8" />
           </button>
           <TypeBadge type={doc.template_type} />
           {dirty && <span style={s.unsavedDot} title="Unsaved changes" />}
@@ -239,66 +302,89 @@ export default function DocumentEditor() {
           )}
           {saved && !dirty && <span style={s.savedPill}>✓ Saved</span>}
 
-          <button
-            style={s.btnIcon}
-            onClick={() => setPanelOpen((p) => !p)}
-            title={panelOpen ? "Hide editor" : "Show editor"}
-          >
-            {panelOpen ? "◀" : "▶"}
-          </button>
-
+          {/* Primary Actions */}
+          <div style={{ position: 'relative' }}>
+            <button style={s.btnOutline} onClick={() => setExportOpen(!exportOpen)}>
+              <Download size={14} style={{ marginRight: 6 }} /> Export <ChevronDown size={14} style={{ marginLeft: 6 }} />
+            </button>
+            {exportOpen && (
+              <>
+                <div style={s.dropdownOverlay} onClick={() => setExportOpen(false)} />
+                <div style={s.dropdownMenu}>
+                  <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleDownloadPDF(); }}>
+                    📄 Export as PDF
+                  </button>
+                  <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=json`} download onClick={() => setExportOpen(false)}>
+                    💻 Export as JSON
+                  </a>
+                  <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=csv`} download onClick={() => setExportOpen(false)}>
+                    📝 Export as CSV
+                  </a>
+                  <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=excel`} download onClick={() => setExportOpen(false)}>
+                    📊 Export as Excel
+                  </a>
+                </div>
+              </>
+            )}
+          </div>
           <button style={s.btnOutline} onClick={handleCopyLink}>
-            {copied ? "Copied!" : "Share link"}
+            <Share2 size={14} style={{ marginRight: 6 }} /> {copied ? "Copied!" : "Share link"}
           </button>
-
-          <button style={s.btnOutline} onClick={handleDownloadPDF}>
-            ⬇ Download PDF
-          </button>
-
           <a href={previewRouteUrl(id)} target="_blank" style={s.btnOutline}>
-            Open ↗
+            <ExternalLink size={14} style={{ marginRight: 6 }} /> Open
           </a>
 
-          {/* All docs navigation — was missing */}
-          <Link href="/documents" style={s.btnOutline}>
-            All docs
-          </Link>
+          <div style={s.topDivider} />
+
+          {/* Secondary Actions */}
+          <button style={s.btnOutline} onClick={handleSaveSnapshot} disabled={savingSnapshot}>
+            <Save size={14} style={{ marginRight: 6 }} /> {savingSnapshot ? "Saving..." : "Save Snapshot"}
+          </button>
+          <button
+            style={historyOpen ? { ...s.btnOutline, background: "#f1f5f9" } : s.btnOutline}
+            onClick={() => setHistoryOpen(true)}
+          >
+            <Clock size={14} style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
+            History
+          </button>
+          <button
+            style={chatOpen ? { ...s.btnOutline, background: "#f1f5f9" } : s.btnOutline}
+            onClick={() => setChatOpen(!chatOpen)}
+          >
+            <MessageSquareText size={14} style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
+            Chat
+          </button>
         </div>
       </div>
 
-      {/* ── Main layout ─────────────────────────────────────────── */}
+      {/* === Main layout === */}
       <div style={s.panels}>
-        {/* ── Left prompt / voice column ──────────────────────── */}
+        {/* === Left prompt / voice column === */}
         <div style={s.promptBox}>
-          {/* AI Prompt Fill */}
-          <button style={s.promptToggle} onClick={() => setPromptOpen((p) => !p)}>
-            ✦ {promptOpen ? "Close AI fill" : "Fill with AI prompt"}
-          </button>
-
-          {promptOpen && (
-            <div style={s.promptInner}>
-              <textarea
-                style={s.promptTextarea as React.CSSProperties}
-                rows={4}
-                placeholder={`Example:\n"Client: Rahul Sharma, Project: Ayurvedic app with AI skin analysis, 3 months, budget ₹5L, 40-30-30 payment split"`}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-              />
-              <button
-                style={generating ? s.btnGeneratingFull : s.btnGenerateFull}
-                onClick={handlePromptRefill}
-                disabled={generating || !prompt.trim()}
-              >
-                {generating ? "Generating..." : "Generate & Fill"}
-              </button>
-            </div>
-          )}
-
-          {/* Voice Recognition */}
-          <div style={voiceWrap}>
+          
+          {/* Card 1: AI Prompt Fill */}
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>
+              Document Generator
+            </h3>
+            <textarea
+              style={s.promptTextarea as React.CSSProperties}
+              rows={4}
+              placeholder={`Describe the document you want...\n\nExample:\n"Generate a software consulting invoice..."`}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
+            <button
+              style={generating ? s.btnGeneratingFull : s.btnGeneratePurple}
+              onClick={handlePromptRefill}
+              disabled={generating || !prompt.trim()}
+            >
+              <Play size={14} style={{ marginRight: 6 }} /> {generating ? "Generating..." : "Generate"}
+            </button>
+            
             {!listening && !generating && (
-              <button style={voiceBtnStart} onClick={startVoice}>
-                🎙 Start speaking
+              <button style={s.btnOutlinePurple} onClick={startVoice}>
+                <Mic size={14} style={{ marginRight: 6 }} /> Start speaking
               </button>
             )}
 
@@ -306,14 +392,14 @@ export default function DocumentEditor() {
               <>
                 <div style={listeningBanner}>
                   <div style={pulseDot} />
-                  <span style={{ fontSize: 12, color: "#e74c3c", fontWeight: 600 }}>
+                  <span style={{ fontSize: 12, color: "#ef4444", fontWeight: 600 }}>
                     Listening... speak clearly
                   </span>
                 </div>
 
                 {transcript && (
                   <div style={transcriptBox}>
-                    <span style={{ fontSize: 10, color: "#aaa", display: "block", marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, color: "#94a3b8", display: "block", marginBottom: 4 }}>
                       Heard so far:
                     </span>
                     {transcript}
@@ -321,7 +407,7 @@ export default function DocumentEditor() {
                 )}
 
                 <button style={voiceBtnStop} onClick={stopVoice}>
-                  ⏹ Stop & fill document
+                  Stop & fill document
                 </button>
               </>
             )}
@@ -329,15 +415,15 @@ export default function DocumentEditor() {
             {generating && (
               <div style={processingBanner}>
                 <div style={spinnerDot} />
-                <span style={{ fontSize: 12, color: "#555", fontWeight: 600 }}>
-                  Filling your document...
+                <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+                  Generating content...
                 </span>
               </div>
             )}
 
             {!listening && !generating && transcript && (
               <div style={transcriptBox}>
-                <span style={{ fontSize: 10, color: "#aaa", display: "block", marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: "#94a3b8", display: "block", marginBottom: 4 }}>
                   Last heard:
                 </span>
                 {transcript}
@@ -348,11 +434,11 @@ export default function DocumentEditor() {
             )}
           </div>
 
-          {/* Translation — was missing */}
-          <div style={translateWrap}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-              Translate document
-            </div>
+          {/* Card 2: Translation */}
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>
+              Translate to
+            </h3>
             <select
               style={translateSelect as React.CSSProperties}
               value={selectedLanguage}
@@ -367,33 +453,58 @@ export default function DocumentEditor() {
               onClick={handleTranslate}
               disabled={translating}
             >
-              {translating ? "Translating..." : "Translate"}
+              <Languages size={14} /> {translating ? "Translating..." : "Translate"}
             </button>
           </div>
+
+          {/* Card 3: AI Summary */}
+          <div style={s.card}>
+            <h3 style={s.cardTitle}>
+              AI Summary
+            </h3>
+            <textarea
+              style={s.promptTextarea as React.CSSProperties}
+              rows={3}
+              placeholder="Generate a concise overview..."
+              value={content?.summary || ""}
+              onChange={(e) => updateField('summary', e.target.value)}
+            />
+            <button
+              style={summarizing ? s.btnGeneratingFull : s.btnGeneratePurple}
+              onClick={handleSummarize}
+              disabled={summarizing}
+            >
+              <Play size={14} style={{ marginRight: 6 }} /> {summarizing ? "Summarizing..." : "Generate Summary"}
+            </button>
+          </div>
+
+          {/* Card 4: AI Validation */}
+          {doc.template_type && (
+            <AiValidationPanel 
+              templateType={doc.template_type} 
+              content={content} 
+              onApplySuggestion={(newContent) => {
+                Object.keys(newContent).forEach(key => {
+                  if (newContent[key] !== content[key]) {
+                    updateField(key, newContent[key]);
+                  }
+                });
+              }}
+            />
+          )}
+
+
+
         </div>
 
-        {/* ── Left fields panel ───────────────────────────────── */}
-        {panelOpen && (
+        {/* === Left fields panel === */}
+        {panelOpen && !previewVersion && (
           <div style={s.leftPanel}>
             <div style={s.panelHeader}>
               <span style={s.panelTitle}>Edit content</span>
               <span style={s.panelSubtitle}>{TYPE_LABELS[doc.template_type] || doc.template_type}</span>
             </div>
             <div style={s.panelScroll}>
-              {doc.template_type && (
-                <AiValidationPanel 
-                  templateType={doc.template_type} 
-                  content={content} 
-                  onApplySuggestion={(newContent) => {
-                    // Update all fields at once
-                    Object.keys(newContent).forEach(key => {
-                      if (newContent[key] !== content[key]) {
-                        updateField(key, newContent[key]);
-                      }
-                    });
-                  }}
-                />
-              )}
               {doc.template_type === "receipt_template" && <ReceiptFields content={content} update={updateField} />}
               {doc.template_type === "client_doc" && <ClientDocFields content={content} update={updateField} />}
               {doc.template_type === "compliance" && <ComplianceFields content={content} update={updateField} />}
@@ -415,19 +526,30 @@ export default function DocumentEditor() {
           </div>
         )}
 
-        {/* ── Right preview ────────────────────────────────────── */}
-        {/* key={previewKey} forces the iframe to reload from /api/doc/[id]/preview
-            after every save, refill, or translation — always showing fresh content. */}
+        {/* === Right preview === */}
         <div style={s.rightPanel}>
-          <div style={s.iframeWrap}>
-            <iframe
-              key={previewKey}
-              src={previewRouteUrl(id)}
-              style={s.iframe}
-              title="Document preview"
-            />
-          </div>
+          {previewVersion && (
+            <div style={s.previewBanner}>
+              <span style={s.previewBannerText}>
+                <strong>Viewing Version {previewVersion.versionNumber} (Read-Only)</strong> — Created {new Date(previewVersion.createdAt).toLocaleString()}
+              </span>
+              <button style={s.btnPrimary} onClick={() => setPreviewVersion(null)}>
+                Exit Preview
+              </button>
+            </div>
+          )}
+          
+          <DocumentPreview 
+            url={previewRouteUrl(id, previewVersion?.id)}
+            onDownload={handleDownloadPDF}
+            previewKey={previewVersion ? previewVersion.id : previewKey}
+          />
         </div>
+
+        {/* ── Right Chat panel ─────────────────────────────────── */}
+        {chatOpen && (
+          <ChatPanel docId={id} onClose={() => setChatOpen(false)} />
+        )}
       </div>
       
       {/* ── Rename Modal ── */}
@@ -453,137 +575,223 @@ export default function DocumentEditor() {
           </div>
         </div>
       )}
+
+      <HistoryPanel
+        docId={id}
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onPreview={(version) => setPreviewVersion(version)}
+        onRestored={() => {
+          // Force a full reload to get the newly restored document state from backend
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }
 
-// ── STYLES ────────────────────────────────────────────────────────────────────
+// === STYLES ===
 const s: Record<string, React.CSSProperties> = {
   centerScreen: {
     height: "100vh", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", background: "#f7f7f7",
+    alignItems: "center", justifyContent: "center", background: "#f8fafc",
   },
   spinner: {
     width: 32, height: 32, borderRadius: "50%",
-    border: "3px solid #e0e0e0", borderTopColor: "#111",
+    border: "3px solid #e2e8f0", borderTopColor: "#6366f1",
     animation: "spin 0.8s linear infinite", marginBottom: 12,
   },
-  loadingText: { fontSize: 13, color: "#888" },
-  promptBox: {
-    borderRight: "1px solid #f0f0f0", flexShrink: 0, width: "300px",
-    background: "#fff", display: "flex", flexDirection: "column", overflowY: "auto",
+  loadingText: { fontSize: 13, color: "#64748b" },
+  
+  iconSidebar: {
+    width: 72, background: "#fff", borderRight: "1px solid #e2e8f0",
+    display: "flex", flexDirection: "column", alignItems: "center",
+    padding: "20px 0", flexShrink: 0, zIndex: 10
   },
-  promptToggle: {
-    width: "100%", textAlign: "left", padding: "10px 16px", fontSize: 12,
-    fontWeight: 600, color: "#131415", background: "#f5f3ff", border: "none",
-    cursor: "pointer", borderBottom: "1px solid #fbfbfd",
+  sidebarItem: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+    color: "#64748b", textDecoration: "none", background: "none", border: "none",
+    width: 56, height: 56, justifyContent: "center", borderRadius: 4,
+    cursor: "pointer", transition: "all 0.2s", marginBottom: 8
   },
-  promptInner: { padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8, background: "#fafafa" },
-  promptTextarea: {
-    width: "100%", border: "1px solid #e8e8e8", borderRadius: 6, padding: "8px 10px",
-    fontSize: 12, color: "#333", outline: "none", fontFamily: "inherit",
-    lineHeight: 1.5, resize: "vertical", background: "#fff", height: "150px",
+  sidebarItemActive: {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+    color: "#0f172a", textDecoration: "none", background: "#f1f5f9", border: "none",
+    width: 56, height: 56, justifyContent: "center", borderRadius: 4,
+    cursor: "pointer", transition: "all 0.2s", marginBottom: 8
   },
-  btnGenerateFull: {
-    width: "100%", fontSize: 13, fontWeight: 600, background: "#141415",
-    color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", cursor: "pointer",
-  },
-  btnGeneratingFull: {
-    width: "100%", fontSize: 13, background: "#121314",
-    color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", cursor: "not-allowed",
-  },
-  page: { height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#f7f7f7" },
+  sidebarLabel: { fontSize: 10, fontWeight: 600 },
+
   topbar: {
     display: "flex", justifyContent: "space-between", alignItems: "center",
-    padding: "0 16px", height: 52, background: "#fff", borderBottom: "1px solid #e8e8e8",
+    padding: "0 24px", height: 60, background: "#fff", borderBottom: "1px solid #e2e8f0",
     flexShrink: 0, gap: 12,
   },
-  topLeft: { display: "flex", alignItems: "center", gap: 10, minWidth: 0 },
+  topLeft: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 },
   topRight: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 },
-  topDivider: { width: 1, height: 20, background: "#e8e8e8" },
+  topDivider: { width: 1, height: 20, background: "#e2e8f0" },
   docName: {
-    fontSize: 14, fontWeight: 600, color: "#111", whiteSpace: "nowrap",
-    overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180,
+    fontSize: 14, fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap",
+    overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200,
+    fontFamily: '"TT Hoves", system-ui, sans-serif',
   },
-  unsavedDot: { width: 7, height: 7, borderRadius: "50%", background: "#f39c12", flexShrink: 0 },
+  unsavedDot: { width: 7, height: 7, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 },
+  
   btnSave: {
-    fontSize: 13, fontWeight: 600, background: "#111", color: "#fff",
-    border: "none", borderRadius: 7, padding: "6px 16px", cursor: "pointer",
+    fontSize: 13, fontWeight: 600, background: "#1e293b", color: "#fff",
+    border: "none", borderRadius: 4, padding: "8px 16px", cursor: "pointer",
   },
-  btnSavingDisabled: { fontSize: 13, background: "#888", color: "#fff", border: "none", borderRadius: 7, padding: "6px 16px" },
+  btnSavingDisabled: { fontSize: 13, background: "#94a3b8", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px" },
   btnSaveFull: {
-    width: "100%", fontSize: 13, fontWeight: 600, background: "#111",
-    color: "#fff", border: "none", borderRadius: 8, padding: "10px 0", cursor: "pointer",
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#1e293b",
+    color: "#fff", border: "none", borderRadius: 4, padding: "10px 0", cursor: "pointer",
+  },
+  dropdownOverlay: {
+    position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99
+  },
+  dropdownMenu: {
+    position: "absolute", top: "100%", left: 0, marginTop: 4,
+    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6,
+    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+    zIndex: 100, minWidth: 160, display: "flex", flexDirection: "column",
+    padding: "4px 0",
+  },
+  dropdownItem: {
+    padding: "8px 16px", background: "none", border: "none",
+    textAlign: "left", fontSize: 13, color: "#1e293b", cursor: "pointer",
+    display: "flex", alignItems: "center", gap: 8, textDecoration: "none"
   },
   btnPrimary: {
-    fontSize: 13, fontWeight: 600, background: "#111", color: "#fff",
-    border: "none", borderRadius: 8, padding: "10px 20px", cursor: "pointer",
+    fontSize: 13, fontWeight: 600, background: "#1e293b", color: "#fff",
+    border: "none", borderRadius: 4, padding: "10px 20px", cursor: "pointer",
   },
   btnOutline: {
-    fontSize: 12, color: "#555", background: "#fff", border: "1px solid #e0e0e0",
-    borderRadius: 7, padding: "6px 12px", cursor: "pointer", textDecoration: "none",
-    display: "inline-block", lineHeight: "normal", whiteSpace: "nowrap",
+    display: "flex", alignItems: "center", gap: 6,
+    fontSize: 13, fontWeight: 500, color: "#475569", background: "#fff", border: "1px solid #e2e8f0",
+    borderRadius: 4, padding: "8px 14px", cursor: "pointer", textDecoration: "none",
   },
-  btnIcon: {
-    fontSize: 11, color: "#888", background: "none", border: "1px solid #e8e8e8",
-    borderRadius: 6, padding: "5px 8px", cursor: "pointer",
-  },
-  savedPill: { fontSize: 12, color: "#27ae60", fontWeight: 500 },
+  savedPill: { fontSize: 12, color: "#10b981", fontWeight: 600 },
+  
   panels: { display: "flex", flex: 1, overflow: "hidden", minHeight: 0 },
-  leftPanel: {
-    width: 300, display: "flex", flexDirection: "column", background: "#fff",
-    borderRight: "1px solid #e8e8e8", flexShrink: 0, overflow: "hidden",
+  
+  promptBox: {
+    width: 320, background: "#f8fafc", display: "flex", flexDirection: "column",
+    overflowY: "auto", padding: "20px 16px", gap: 16, borderRight: "1px solid #e2e8f0", flexShrink: 0,
   },
-  panelHeader: { padding: "14px 16px 10px", borderBottom: "1px solid #f0f0f0", flexShrink: 0 },
-  panelTitle: { fontSize: 12, fontWeight: 700, color: "#111", display: "block", marginBottom: 2 },
-  panelSubtitle: { fontSize: 11, color: "#aaa" },
-  panelScroll: { flex: 1, overflowY: "auto", padding: "14px 16px" },
-  saveFooter: { padding: "12px 16px", borderTop: "1px solid #f0f0f0", flexShrink: 0 },
+  card: {
+    background: "#fff", borderRadius: 4, padding: "20px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)", border: "1px solid #e2e8f0",
+    display: "flex", flexDirection: "column", gap: 12
+  },
+  cardTitle: {
+    fontSize: 14, fontWeight: 700, color: "#1e293b", margin: 0,
+    display: "flex", alignItems: "center", gap: 6,
+    fontFamily: '"TT Hoves", system-ui, sans-serif',
+  },
+  promptTextarea: {
+    width: "100%", border: "1px solid #e2e8f0", borderRadius: 4, padding: "10px 12px",
+    fontSize: 13, color: "#334155", outline: "none", fontFamily: "inherit",
+    lineHeight: 1.5, resize: "vertical", background: "#fafafa", height: "100px",
+  },
+  btnGeneratePurple: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#1e293b",
+    color: "#fff", border: "none", borderRadius: 4, padding: "10px 0", cursor: "pointer",
+    transition: "background 0.2s"
+  },
+  btnGeneratingFull: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#64748b",
+    color: "#fff", border: "none", borderRadius: 4, padding: "10px 0", cursor: "not-allowed",
+  },
+  btnOutlinePurple: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    width: "100%", fontSize: 13, fontWeight: 600, background: "#fff", color: "#1e293b",
+    border: "1px solid #e2e8f0", borderRadius: 4, padding: "10px 0", cursor: "pointer",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.02)", transition: "background 0.2s"
+  },
+
+  leftPanel: {
+    width: 360, display: "flex", flexDirection: "column", background: "#fff",
+    borderRight: "1px solid #e2e8f0", flexShrink: 0, overflow: "hidden",
+  },
+  panelHeader: { padding: "20px 24px 16px", borderBottom: "1px solid #f1f5f9", flexShrink: 0 },
+  panelTitle: { fontSize: 14, fontWeight: 700, color: "#1e293b", display: "block", marginBottom: 4, fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  panelSubtitle: { fontSize: 12, color: "#64748b" },
+  panelScroll: { flex: 1, overflowY: "auto", padding: "16px 24px" },
+  saveFooter: { padding: "16px 24px", borderTop: "1px solid #f1f5f9", flexShrink: 0 },
+  
   rightPanel: {
     flex: 1, display: "flex", flexDirection: "column",
-    padding: 16, overflow: "hidden", minHeight: 0,
+    padding: 24, overflow: "hidden", minHeight: 0, background: "#f1f5f9"
   },
+  pdfHeader: {
+    display: "flex", alignItems: "center", gap: 16, marginBottom: 16,
+    background: "#fff", padding: "8px 16px", borderRadius: 4, border: "1px solid #e2e8f0"
+  },
+  pdfZoomGroup: {
+    display: "flex", alignItems: "center", gap: 8, border: "1px solid #e2e8f0", borderRadius: 4, padding: "4px"
+  },
+  pdfBtn: {
+    background: "none", border: "none", color: "#475569", cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 4
+  },
+  pdfBtnOutline: {
+    background: "#fff", border: "1px solid #e2e8f0", color: "#475569", cursor: "pointer",
+    padding: "6px 12px", borderRadius: 4, fontSize: 12, fontWeight: 500
+  },
+  pdfZoomText: { fontSize: 12, fontWeight: 600, color: "#1e293b", width: 40, textAlign: "center" },
+
   iframeWrap: {
-    flex: 1, borderRadius: 10, overflow: "hidden", border: "1px solid #e0e0e0",
-    background: "#fff", minHeight: 0, display: "flex",
+    flex: 1, borderRadius: 4, overflow: "hidden", border: "1px solid #e2e8f0",
+    background: "#fff", minHeight: 0, display: "flex", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)"
   },
   iframe: { width: "100%", height: "100%", border: "none" },
+  previewBanner: {
+    background: "#fef3c7", color: "#92400e", padding: "12px 16px",
+    borderRadius: 4, marginBottom: 16, display: "flex",
+    justifyContent: "space-between", alignItems: "center",
+    border: "1px solid #fde68a"
+  },
+  previewBannerText: { fontSize: 14 },
 };
 
 const voiceWrap: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 8, padding: "12px 16px" };
-const transcriptBox: React.CSSProperties = { fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 };
+const transcriptBox: React.CSSProperties = { fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 4, padding: "8px 10px", lineHeight: 1.5 };
 const pulseDot: React.CSSProperties = { width: 10, height: 10, borderRadius: "50%", background: "#e74c3c", animation: "pulse 1s ease infinite" };
-const voiceBtnStart: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 600, color: "#fff", background: "#111", border: "none", borderRadius: 8, padding: "12px 0", cursor: "pointer", transition: "all 0.2s" };
-const voiceBtnStop: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 700, color: "#fff", background: "#e74c3c", border: "none", borderRadius: 8, padding: "12px 0", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 2px 8px rgba(231,76,60,0.35)" };
-const listeningBanner: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, background: "#fdecea", border: "1px solid #f5c6c0", borderRadius: 8, padding: "8px 10px" };
-const processingBanner: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, background: "#f0f0f0", border: "1px solid #e0e0e0", borderRadius: 8, padding: "8px 10px" };
+const voiceBtnStart: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 600, color: "#fff", background: "#111", border: "none", borderRadius: 4, padding: "12px 0", cursor: "pointer", transition: "all 0.2s" };
+const voiceBtnStop: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 700, color: "#fff", background: "#e74c3c", border: "none", borderRadius: 4, padding: "12px 0", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 2px 8px rgba(231,76,60,0.35)" };
+const listeningBanner: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, background: "#fdecea", border: "1px solid #f5c6c0", borderRadius: 4, padding: "8px 10px" };
+const processingBanner: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, background: "#f0f0f0", border: "1px solid #e0e0e0", borderRadius: 4, padding: "8px 10px" };
 const spinnerDot: React.CSSProperties = { width: 12, height: 12, borderRadius: "50%", border: "2px solid #ccc", borderTopColor: "#555", animation: "spin 0.7s linear infinite" };
-const manualFillBtn: React.CSSProperties = { marginTop: 8, width: "100%", fontSize: 12, fontWeight: 600, background: "#111", color: "#fff", border: "none", borderRadius: 6, padding: "8px 0", cursor: "pointer" };
+const manualFillBtn: React.CSSProperties = { marginTop: 8, width: "100%", fontSize: 12, fontWeight: 600, background: "#111", color: "#fff", border: "none", borderRadius: 4, padding: "8px 0", cursor: "pointer" };
 
 const translateWrap: React.CSSProperties = {
   padding: "12px 16px", borderTop: "1px solid #f0f0f0", display: "flex",
   flexDirection: "column", gap: 8,
 };
 const translateSelect: React.CSSProperties = {
-  width: "100%", border: "1px solid #e8e8e8", borderRadius: 6, padding: "7px 9px",
-  fontSize: 12, color: "#333", outline: "none", fontFamily: "inherit",
+  width: "100%", border: "1px solid #e2e8f0", borderRadius: 4, padding: "10px 12px",
+  fontSize: 13, color: "#334155", outline: "none", fontFamily: "inherit",
   background: "#fafafa", cursor: "pointer",
 };
 const translateBtn: React.CSSProperties = {
-  width: "100%", fontSize: 12, fontWeight: 600, background: "#111", color: "#fff",
-  border: "none", borderRadius: 6, padding: "8px 0", cursor: "pointer",
+  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+  width: "100%", fontSize: 13, fontWeight: 600, background: "#1e293b", color: "#fff",
+  border: "none", borderRadius: 4, padding: "10px 0", cursor: "pointer",
 };
 const translateBtnDisabled: React.CSSProperties = {
-  width: "100%", fontSize: 12, background: "#aaa", color: "#fff",
-  border: "none", borderRadius: 6, padding: "8px 0", cursor: "not-allowed",
+  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+  width: "100%", fontSize: 13, background: "#94a3b8", color: "#fff",
+  border: "none", borderRadius: 4, padding: "10px 0", cursor: "not-allowed",
 };
 
 const modalStyles = {
   overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" } as React.CSSProperties,
-  content: { background: "#fff", borderRadius: 12, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" } as React.CSSProperties,
-  title: { fontSize: 16, fontWeight: 700, color: "#111", margin: "0 0 16px" } as React.CSSProperties,
-  input: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit" } as React.CSSProperties,
+  content: { background: "#fff", borderRadius: 4, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" } as React.CSSProperties,
+  title: { fontSize: 16, fontWeight: 700, color: "#111", margin: "0 0 16px", fontFamily: '"TT Hoves", system-ui, sans-serif' } as React.CSSProperties,
+  input: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 4, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit" } as React.CSSProperties,
   actions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 } as React.CSSProperties,
-  cancel: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
-  save: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
+  cancel: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
+  save: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
 };

@@ -41,9 +41,9 @@ const FALLBACK = {
 };
 
 const SIZES: Record<string, React.CSSProperties> = {
-  sm: { fontSize: 10, padding: "1px 7px", borderRadius: 20 },
-  md: { fontSize: 11, padding: "2px 9px", borderRadius: 20 },
-  lg: { fontSize: 12, padding: "4px 12px", borderRadius: 20 },
+  sm: { fontSize: 10, padding: "1px 7px", borderRadius: 4 },
+  md: { fontSize: 11, padding: "2px 9px", borderRadius: 4 },
+  lg: { fontSize: 12, padding: "4px 12px", borderRadius: 4 },
 };
 
 interface TypeBadgeProps {

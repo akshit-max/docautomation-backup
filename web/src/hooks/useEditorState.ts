@@ -4,7 +4,10 @@ import { getDocument, updateDocument, refillDocument } from "@/lib/api";
 // Returns the URL for the server-side preview route.
 // The preview route reads current Firestore content and renders fresh HTML —
 // never relies on the stale html_content field stored in Firestore.
-export function previewRouteUrl(id: string) {
+export function previewRouteUrl(id: string, versionId?: string) {
+  if (versionId) {
+    return `/api/doc/${id}/preview?versionId=${versionId}`;
+  }
   return `/api/doc/${id}/preview`;
 }
 

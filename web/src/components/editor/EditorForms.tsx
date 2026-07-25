@@ -141,7 +141,7 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
       <button style={f.addBtn} onClick={addItem}>+ Add line item</button>
 
       <div style={gstToggleWrap}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>GST</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>Enable GST</span>
         <button
           style={{
             ...gstToggleBtn,
@@ -156,7 +156,7 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
             }
           }}
         >
-          {gstEnabled ? "ON" : "OFF"}
+          {gstEnabled ? "ON ●──" : "OFF ○──"}
         </button>
       </div>
 
@@ -276,7 +276,7 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
       <button style={f.addBtn} onClick={addItem}>+ Add line item</button>
 
       <div style={gstToggleWrap}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>GST</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>Enable GST</span>
         <button
           style={{
             ...gstToggleBtn,
@@ -291,7 +291,7 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
             }
           }}
         >
-          {gstEnabled ? "ON" : "OFF"}
+          {gstEnabled ? "ON ●──" : "OFF ○──"}
         </button>
       </div>
 
@@ -377,12 +377,12 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
   return (
     <div style={f.wrap}>
       <SectionLabel>Invoice info</SectionLabel>
-      <Field label="Invoice number" value={content.invoice_number} onChange={v => update("invoice_number", v)} required />
-      <Field label="Date"           value={content.date}           onChange={v => update("date", v)} required />
-      <Field label="Project name"   value={content.project_name}   onChange={v => update("project_name", v)} required />
+      <Field label="Invoice number" value={content.invoice_number} onChange={v => update("invoice_number", v)} required error={!content.invoice_number} />
+      <Field label="Date"           value={content.date}           onChange={v => update("date", v)} required error={!content.date} />
+      <Field label="Project name"   value={content.project_name}   onChange={v => update("project_name", v)} required error={!content.project_name} />
 
       <SectionLabel>Client info</SectionLabel>
-      <Field label="Client name"    value={content.client_name}    onChange={v => update("client_name", v)} required />
+      <Field label="Client name"    value={content.client_name}    onChange={v => update("client_name", v)} required error={!content.client_name} />
       <Field label="Client phone"   value={content.client_phone}   onChange={v => update("client_phone", v)} />
       <Field label="Client email"   value={content.client_email}   onChange={v => update("client_email", v)} />
       <Field label="Client address" value={content.client_address} onChange={v => update("client_address", v)} />
@@ -411,7 +411,7 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
       <button style={f.addBtn} onClick={addItem}>+ Add line item</button>
 
       <div style={gstToggleWrap}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>GST</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>Enable GST</span>
         <button
           style={{
             ...gstToggleBtn,
@@ -426,7 +426,7 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
             }
           }}
         >
-          {gstEnabled ? "ON" : "OFF"}
+          {gstEnabled ? "ON ●──" : "OFF ○──"}
         </button>
       </div>
 
@@ -546,26 +546,26 @@ const f: Record<string, React.CSSProperties> = {
   wrap:         { display: "flex", flexDirection: "column", gap: 10 },
   group:        { display: "flex", flexDirection: "column", gap: 4 },
   label:        { fontSize: 11, fontWeight: 600, color: "#888", textTransform: "capitalize" },
-  input:        { width: "100%", border: "1px solid #e8e8e8", borderRadius: 6, padding: "7px 9px", fontSize: 12, color: "#333", outline: "none", fontFamily: "inherit", lineHeight: 1.5, background: "#fafafa" },
-  textarea:     { width: "100%", border: "1px solid #e8e8e8", borderRadius: 6, padding: "7px 9px", fontSize: 12, color: "#333", outline: "none", fontFamily: "inherit", lineHeight: 1.5, resize: "vertical", background: "#fafafa" },
+  input:        { width: "100%", border: "1px solid #e8e8e8", borderRadius: 4, padding: "7px 9px", fontSize: 12, color: "#333", outline: "none", fontFamily: "inherit", lineHeight: 1.5, background: "#fafafa" },
+  textarea:     { width: "100%", border: "1px solid #e8e8e8", borderRadius: 4, padding: "7px 9px", fontSize: 12, color: "#333", outline: "none", fontFamily: "inherit", lineHeight: 1.5, resize: "vertical", background: "#fafafa" },
   sectionLabel: { fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: 1, paddingTop: 8, paddingBottom: 4, borderBottom: "1px solid #f0f0f0", marginBottom: 4 },
-  card:         { border: "1px solid #efefef", borderRadius: 8, padding: "10px 12px", background: "#fafafa" },
+  card:         { border: "1px solid #efefef", borderRadius: 4, padding: "10px 12px", background: "#fafafa" },
   cardTitle:    { width: "100%", border: "none", borderBottom: "1px solid #e8e8e8", padding: "3px 0 6px", fontSize: 12, fontWeight: 700, outline: "none", background: "transparent", marginBottom: 8, fontFamily: "inherit" },
   pointRow:     { display: "flex", alignItems: "center", gap: 6, marginBottom: 4 },
   bullet:       { color: "#ccc", fontSize: 8, flexShrink: 0 },
   pointInput:   { flex: 1, border: "none", borderBottom: "1px solid #f0f0f0", fontSize: 12, padding: "2px 0", outline: "none", background: "transparent", color: "#444", fontFamily: "inherit" },
   uvpRow:       { display: "flex", alignItems: "center", gap: 4 },
-  addBtn:       { fontSize: 12, color: "#555", background: "none", border: "1.5px dashed #ddd", borderRadius: 6, padding: "7px 12px", cursor: "pointer", textAlign: "left", fontFamily: "inherit" },
+  addBtn:       { width: "100%", fontSize: 12, color: "#555", background: "#fbfbfb", border: "1.5px dashed #ccc", borderRadius: 4, padding: "10px 12px", cursor: "pointer", textAlign: "center", fontFamily: "inherit", fontWeight: 600 },
   removeBtn:    { fontSize: 11, color: "#c0392b", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" },
 };
 
 const gstToggleWrap: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "space-between",
-  padding: "8px 12px", background: "#f7f7f7", borderRadius: 8,
+  padding: "8px 12px", background: "#f7f7f7", borderRadius: 4,
   border: "1px solid #efefef", marginTop: 4,
 };
 
 const gstToggleBtn: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 20,
+  fontSize: 11, fontWeight: 700, padding: "3px 12px", borderRadius: 4,
   border: "none", cursor: "pointer", letterSpacing: "0.5px", transition: "background 0.15s",
 };

@@ -37,25 +37,46 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { searchParams } = new URL(request.url);
     const autoprint = searchParams.get('autoprint') === '1';
 
-    const docRef = adminDb.collection('documents').doc(id);
-    const docSnap = await docRef.get();
+    const versionId = searchParams.get('versionId');
 
-    if (!docSnap.exists) {
-      return new NextResponse('<h1>Document not found</h1>', {
-        status: 404,
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
+    let data;
 
-    const data = docSnap.data();
-    if (data?.isDeleted) {
-      return new NextResponse('<h1>Document not found</h1>', {
-        status: 404,
-        headers: { 'Content-Type': 'text/html' },
-      });
+    if (versionId) {
+      const versionRef = adminDb.collection('documents').doc(id).collection('versions').doc(versionId);
+      const versionSnap = await versionRef.get();
+      if (!versionSnap.exists) {
+        return new NextResponse('<h1>Version not found</h1>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
+      data = versionSnap.data()?.documentSnapshot;
+    } else {
+      const docRef = adminDb.collection('documents').doc(id);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
+        return new NextResponse('<h1>Document not found</h1>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
+
+      const docData = docSnap.data();
+      if (docData?.isDeleted) {
+        return new NextResponse('<h1>Document not found</h1>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' },
+        });
+      }
+      data = docData;
     }
 
     const templateType = data?.template_type || 'developer_doc';
+
+    // Sanitize against known allow-list before using in path.join to prevent path traversal
+    const ALLOWED_TEMPLATE_TYPES = ['invoice', 'receipt_template', 'client_doc', 'compliance', 'timeline', 'developer_doc'];
+    const safeTemplateType = ALLOWED_TEMPLATE_TYPES.includes(templateType) ? templateType : 'developer_doc';
 
     // Try to load the Jinja2-style HTML template from the backend templates directory
     // In production this should be bundled or served from a known path.
@@ -64,7 +85,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       '..',
       'backend',
       'templates',
-      templateType,
+      safeTemplateType,
       'layout.html'
     );
 
@@ -73,7 +94,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (fs.existsSync(templatePath)) {
       const templateSource = fs.readFileSync(templatePath, 'utf-8');
       const content = data?.content || {};
-      html = renderTemplate(templateSource, content);
+      html = renderTemplate(templateSource, { ...content, template_type: safeTemplateType });
     } else {
       // Fallback: render a clean, modern UI for missing templates
       const content = data?.content || {};

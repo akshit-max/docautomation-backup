@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createDocument, uploadPDF, generateDoc } from "@/lib/api";
+import { createDocument, uploadPDF, generateDoc, createBatch, uploadBatchFile } from "@/lib/api";
+import { ProcessingTimeline } from "@/components/ProcessingTimeline";
 
 const TEMPLATES = [
   { type: "invoice",           title: "Invoice",           description: "GST invoice with line items, payment status and UPI details" },
@@ -54,37 +55,50 @@ export default function Home() {
     };
   }, [uploadPhase]);
 
-  const handleFile = async (file: File) => {
-    if (!file) return;
-    if (!file.name.match(/\.(pdf|PDF)$/)) {
-      setUploadError("Only PDF files are supported.");
+  const handleFiles = async (files: FileList | File[]) => {
+    if (!files || files.length === 0) return;
+    
+    // Filter PDFs
+    const pdfFiles = Array.from(files).filter(f => f.name.match(/\.(pdf|PDF|jpg|jpeg|png|webp)$/i));
+    
+    if (pdfFiles.length === 0) {
+      setUploadError("Please upload a PDF or image file (JPG, PNG, WebP).");
       return;
     }
 
+    // V1: Batch processing is not supported in this deployment.
+    // The batch worker requires a persistent background process which is
+    // incompatible with serverless infrastructure. Batch support is planned for V2.
+    if (pdfFiles.length > 1) {
+      setUploadError("Batch upload is not available in this version. Please upload one file at a time.");
+      return;
+    }
+
+    // Single file — use existing synchronous pipeline
+    const file = pdfFiles[0];
     try {
       setUploadError("");
       setUploadPhase("uploading");
 
-      // 1. Upload → OCR → classify
       const uploadRes = await uploadPDF(file);
-      const { extracted_text, detected_type } = uploadRes.data;
+      const { extracted_text, detected_type, source_file } = uploadRes.data;
 
       setUploadPhase("generating");
 
-      // 2. AI generation
-      const genRes = await generateDoc(extracted_text, detected_type);
+      const genRes = await generateDoc(extracted_text, detected_type, source_file);
       const docId = genRes.data.doc_id;
 
       setUploadPhase("saving");
-      
-      router.push(`/doc/${docId}`);
-      
+      setTimeout(() => {
+        setUploadPhase("done");
+        setTimeout(() => {
+          router.push(`/doc/${docId}`);
+        }, 400);
+      }, 100);
     } catch (err: any) {
       setUploadPhase("idle");
       setUploadError(
-        err?.response?.data?.error ||
-        err?.friendlyMessage ||
-        "Upload failed. Make sure the OCR service is running."
+        err?.response?.data?.error || err?.friendlyMessage || "Upload failed."
       );
     }
   };
@@ -92,13 +106,13 @@ export default function Home() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    handleFiles(e.dataTransfer.files);
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (e.target.files) {
+      handleFiles(e.target.files);
+    }
   };
 
   const isUploading = uploadPhase !== "idle" && uploadPhase !== "done";
@@ -115,7 +129,7 @@ export default function Home() {
           <Link href="/analytics" style={s.docsLink}>
             Analytics
           </Link>
-          <Link href="/documents" style={s.docsLink}>
+          <Link href="/documents" style={s.docsLinkBlack}>
             View documents →
           </Link>
         </div>
@@ -175,7 +189,8 @@ export default function Home() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf"
+          accept=".pdf,.jpg,.jpeg,.png,.webp"
+          multiple={false}
           style={{ display: "none" }}
           onChange={handleFileInput}
         />
@@ -184,57 +199,16 @@ export default function Home() {
           <>
             <div style={{ fontSize: 28, marginBottom: 8 }}>📄</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#333", marginBottom: 4 }}>
-              Drop a PDF here, or click to browse
+              Drop a PDF or image here, or click to browse
             </div>
             <div style={{ fontSize: 12, color: "#aaa" }}>
-              AI will extract text, classify the document, and generate all fields
+              Supports PDF, JPG, PNG, and WebP. AI extracts and structures the content automatically.
             </div>
           </>
         )}
 
-        {uploadPhase === "uploading" && (
-          <>
-            <div style={s.spinner} />
-            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              Uploading document...
-            </div>
-          </>
-        )}
-
-        {uploadPhase === "ocr" && (
-          <>
-            <div style={s.spinner} />
-            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              Extracting text (OCR)...
-            </div>
-          </>
-        )}
-
-        {uploadPhase === "classifying" && (
-          <>
-            <div style={s.spinner} />
-            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              Classifying document type...
-            </div>
-          </>
-        )}
-
-        {uploadPhase === "generating" && (
-          <>
-            <div style={s.spinner} />
-            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              AI is structuring your data...
-            </div>
-          </>
-        )}
-
-        {uploadPhase === "saving" && (
-          <>
-            <div style={s.spinner} />
-            <div style={{ fontSize: 13, color: "#555", marginTop: 10, fontWeight: 600 }}>
-              Saving document...
-            </div>
-          </>
+        {uploadPhase !== "idle" && (
+          <ProcessingTimeline currentPhase={uploadPhase} />
         )}
       </div>
 
@@ -268,13 +242,17 @@ const s: Record<string, React.CSSProperties> = {
     padding: "20px 0",
   },
   logo: { display: "flex", alignItems: "center", gap: 8 },
-  logoText: { fontSize: 16, fontWeight: 700, color: "#111", letterSpacing: "-0.3px" },
+  logoText: { fontSize: 16, fontWeight: 700, color: "#111", letterSpacing: "-0.3px", fontFamily: '"TT Hoves", system-ui, sans-serif' },
   docsLink: {
     fontSize: 13, fontWeight: 600, color: "#555", textDecoration: "none",
-    padding: "6px 14px", borderRadius: 8, border: "1px solid #e0e0e0", background: "#fff",
+    padding: "6px 14px", borderRadius: 4, border: "1px solid #e0e0e0", background: "#fff",
+  },
+  docsLinkBlack: {
+    fontSize: 13, fontWeight: 600, color: "#fff", textDecoration: "none",
+    padding: "6px 14px", borderRadius: 4, border: "1px solid #111", background: "#111",
   },
   hero: { textAlign: "center", padding: "48px 0 36px" },
-  heroTitle: { fontSize: 34, fontWeight: 700, color: "#111", margin: 0, letterSpacing: "-0.5px" },
+  heroTitle: { fontSize: 34, fontWeight: 700, color: "#111", margin: 0, letterSpacing: "-0.5px", fontFamily: '"TT Hoves", system-ui, sans-serif' },
   heroSub: { fontSize: 15, color: "#888", marginTop: 10, fontWeight: 400 },
   grid: {
     display: "grid",
@@ -286,7 +264,7 @@ const s: Record<string, React.CSSProperties> = {
   card: {
     background: "#ffffff",
     border: "1.5px solid #e8e8e8",
-    borderRadius: 14,
+    borderRadius: 4,
     padding: "20px",
     cursor: "pointer",
     textAlign: "left",
@@ -304,11 +282,11 @@ const s: Record<string, React.CSSProperties> = {
     width: 24, height: 24, border: "2.5px solid #eee", borderTopColor: "#111",
     borderRadius: "50%", animation: "spin .8s linear infinite",
   },
-  cardTitle: { fontSize: 17, fontWeight: 700, color: "#111" },
+  cardTitle: { fontSize: 17, fontWeight: 700, color: "#111", fontFamily: '"TT Hoves", system-ui, sans-serif' },
   cardDesc: { fontSize: 13, color: "#888", lineHeight: 1.5 },
   cardTag: {
     alignSelf: "flex-start", fontSize: 13, fontWeight: 600,
-    padding: "3px 10px", borderRadius: 20, background: "#f0f0f0", color: "#555",
+    padding: "3px 10px", borderRadius: 4, background: "#f0f0f0", color: "#555",
   },
   divider: {
     display: "flex", alignItems: "center", width: "100%", maxWidth: 860,
@@ -318,8 +296,10 @@ const s: Record<string, React.CSSProperties> = {
   dropzone: {
     width: "100%",
     maxWidth: 860,
-    border: "2px dashed #ddd",
-    borderRadius: 14,
+    borderWidth: "2px",
+    borderStyle: "dashed",
+    borderColor: "#ddd",
+    borderRadius: 4,
     padding: "40px 24px",
     display: "flex",
     flexDirection: "column",
@@ -331,7 +311,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   uploadError: {
     marginTop: 12, padding: "10px 16px", background: "#fdecea",
-    border: "1px solid #f5c6c0", borderRadius: 8,
+    border: "1px solid #f5c6c0", borderRadius: 4,
     fontSize: 13, color: "#c0392b", maxWidth: 860, width: "100%",
   },
   hint: { marginTop: 32, fontSize: 13, color: "#aaa", textAlign: "center" },

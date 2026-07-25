@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ActivityBell } from "@/components/ActivityBell";
 import { listDocuments, deleteDocument } from "@/lib/api";
 
 const TYPE_META: Record<string, { label: string, icon: string, bg: string, color: string }> = {
@@ -16,32 +17,72 @@ const TYPE_META: Record<string, { label: string, icon: string, bg: string, color
 export default function Documents() {
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  const [loadingMore, setLoadingMore] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [renamingDoc, setRenamingDoc] = useState<any | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const router = useRouter();
 
-  const load = () => {
-    setLoading(true);
-    listDocuments()
+  // Pagination & Filtering state
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterClient, setFilterClient] = useState("");
+  // Additional filters could go here (from, to, sort)
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Load initial or when filters change
+  const load = (reset = true) => {
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    const params: any = {
+      q: debouncedSearch,
+      type: filterType === "all" ? undefined : filterType,
+      client: filterClient || undefined,
+      limit: 20
+    };
+
+    if (!reset && nextCursor) {
+      params.cursor = nextCursor;
+    }
+
+    listDocuments(params)
       .then(r => {
-        setDocs(r.data.documents || r.data || []);
+        const newDocs = r.data.documents || r.data || [];
+        setDocs(prev => reset ? newDocs : [...prev, ...newDocs]);
+        setNextCursor(r.data.nextCursor || null);
+        setHasMore(!!r.data.hasMore);
       })
       .catch(err => {
         console.error(err);
-        setDocs([]);
+        if (reset) setDocs([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setLoadingMore(false);
+      });
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(true); 
+  }, [debouncedSearch, filterType, filterClient]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     e.preventDefault();
-    if (!window.confirm("Delete this document permanently?")) return;
+    if (!await window.confirm("Delete this document permanently?")) return;
     setDeleting(id);
     try {
       await deleteDocument(id);
@@ -68,37 +109,17 @@ export default function Documents() {
     
     try {
       let key = "project_name";
-      if (docToUpdate.template_type === "compliance") key = "client_name";  // compliance shows client_name in dashboard
-      if (docToUpdate.template_type === "receipt_template") key = "for_service"; // fixed: was 'service_name' (legacy name removed in Phase 4)
+      if (docToUpdate.template_type === "compliance") key = "client_name";
+      if (docToUpdate.template_type === "receipt_template") key = "for_service";
       if (docToUpdate.template_type === "developer_doc") key = "title";
       
       const { updateDocument } = await import('@/lib/api');
       await updateDocument(docToUpdate.id, { ...(docToUpdate.content || {}), [key]: newName });
     } catch (err) {
       alert("Rename failed. Please try again.");
-      load(); // revert
+      load(true); // revert
     }
   };
-
-  const filtered = docs.filter(d => {
-    const matchType = filter === "all" || d.template_type === filter;
-    
-    const term = search.toLowerCase();
-    let matchSearch = true;
-    
-    if (term) {
-      const pName = (d.project_name || "").toLowerCase();
-      const rawText = (d.raw_input || "").toLowerCase();
-      // [ARCH-DEBT: CLIENT-SIDE SEARCH]
-      // Condition for replacement: When total document count exceeds ~1000 and rendering/searching becomes a measurable bottleneck,
-      // move to server-side querying or an indexed search solution (e.g. Algolia/Elastic). Do not replace prematurely.
-      const contentText = d.content ? JSON.stringify(d.content).toLowerCase() : "";
-      
-      matchSearch = pName.includes(term) || contentText.includes(term) || rawText.includes(term);
-    }
-    
-    return matchType && matchSearch;
-  });
 
   const formatDate = (str: string) => {
     if (!str) return "";
@@ -119,7 +140,8 @@ export default function Documents() {
             <span style={s.logoText}>makewithus</span>
           </Link>
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <ActivityBell />
           <Link href="/analytics" style={{...s.newBtn, background: '#fff', color: '#111', border: '1px solid #ddd'}}>Analytics</Link>
           <Link href="/" style={s.newBtn}>+ New document</Link>
         </div>
@@ -127,28 +149,37 @@ export default function Documents() {
 
       <div style={s.wrap}>
         {/* ── Search + Filter bar ── */}
-        {!loading && (
-          <div style={s.toolbar}>
-            <input
-              style={s.searchInput as React.CSSProperties}
-              type="text"
-              placeholder="Search documents..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <div style={s.filterRow}>
-              {["all", "invoice", "receipt_template", "client_doc", "compliance", "timeline"].map((f) => (
-                <button
-                  key={f}
-                  style={{ ...s.filterBtn, ...(filter === f ? s.filterBtnActive : {}) }}
-                  onClick={() => setFilter(f)}
-                >
-                  {f === "all" ? "All" : (TYPE_META[f]?.label ?? f)}
-                </button>
-              ))}
-            </div>
+        <div style={s.toolbar}>
+          <input
+            style={s.searchInput as React.CSSProperties}
+            type="text"
+            placeholder="Search documents by name, client, or invoice number..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div style={s.filterRow}>
+            {["all", "invoice", "receipt_template", "client_doc", "compliance", "timeline"].map((f) => (
+              <button
+                key={f}
+                style={{ ...s.filterBtn, ...(filterType === f ? s.filterBtnActive : {}) }}
+                onClick={() => setFilterType(f)}
+              >
+                {f === "all" ? "All" : (TYPE_META[f]?.label ?? f)}
+              </button>
+            ))}
           </div>
-        )}
+          
+          <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+            <input
+              style={s.filterInput as React.CSSProperties}
+              type="text"
+              placeholder="Filter by Client Name..."
+              value={filterClient}
+              onChange={(e) => setFilterClient(e.target.value)}
+            />
+            {/* Future filters: Date from, Date to, Sort order can be added here easily */}
+          </div>
+        </div>
 
         {/* ── Loading ── */}
         {loading && (
@@ -159,27 +190,38 @@ export default function Documents() {
         )}
 
         {/* ── Empty state ── */}
-        {!loading && filtered.length === 0 && (
+        {!loading && docs.length === 0 && (
           <div style={s.centerBox}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
             <p style={{ fontSize: 16, fontWeight: 600, color: "#333", marginBottom: 6 }}>
-              {docs.length === 0 ? "No documents yet" : "No documents match your search"}
+              {!search && filterType === "all" && !filterClient 
+                ? "No documents yet" 
+                : "No matching documents"}
             </p>
-            <p style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
-              {docs.length === 0
-                ? "Create your first document or upload a PDF to get started."
-                : "Try adjusting your search or filter."}
-            </p>
-            {docs.length === 0 && (
+            {!search && filterType === "all" && !filterClient ? (
+              <p style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
+                Create your first document or upload a PDF to get started.
+              </p>
+            ) : (
+              <div style={{ fontSize: 13, color: "#aaa", marginBottom: 24, textAlign: 'left', display: 'inline-block' }}>
+                Try:
+                <ul style={{ marginTop: 4, paddingLeft: 20 }}>
+                  <li>Clearing filters</li>
+                  <li>Searching by invoice number</li>
+                  <li>Searching by client</li>
+                </ul>
+              </div>
+            )}
+            {!search && filterType === "all" && !filterClient && (
               <Link href="/" style={s.newBtn}>+ New document</Link>
             )}
           </div>
         )}
 
         {/* ── Documents grid ── */}
-        {!loading && filtered.length > 0 && (
+        {!loading && docs.length > 0 && (
           <div style={s.grid}>
-            {filtered.map(doc => {
+            {docs.map(doc => {
               const meta = TYPE_META[doc.template_type] || { label: doc.template_type, icon: "📄", bg: "#f0f0f0", color: "#666" };
               return (
                 <div
@@ -201,7 +243,7 @@ export default function Documents() {
 
                   <div style={s.cardId}>/doc/{doc.id}</div>
 
-                  {doc.source_file && (
+                  {typeof doc.source_file === 'string' && (
                     <div style={s.cardSource}>
                       📄 {doc.source_file.split("/").pop()?.split("\\").pop()}
                     </div>
@@ -246,23 +288,22 @@ export default function Documents() {
 
       {/* ── Rename Modal ── */}
       {renamingDoc && (
-        <div style={modalStyles.overlay} onClick={() => setRenamingDoc(null)}>
-          <div style={modalStyles.content} onClick={e => e.stopPropagation()}>
-            <h3 style={modalStyles.title}>Rename Document</h3>
+        <div style={s.modalOverlay} onClick={() => setRenamingDoc(null)}>
+          <div style={s.modalContent} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: "0 0 16px 0", fontSize: 16 }}>Rename Document</h3>
             <input 
               autoFocus
-              style={modalStyles.input as React.CSSProperties}
+              style={s.renameInput as React.CSSProperties}
               value={renameInput}
               onChange={e => setRenameInput(e.target.value)}
               onKeyDown={e => {
                  if (e.key === 'Enter') handleSaveRename();
                  if (e.key === 'Escape') setRenamingDoc(null);
               }}
-              onFocus={e => e.target.select()}
             />
-            <div style={modalStyles.actions}>
-              <button style={modalStyles.cancel} onClick={() => setRenamingDoc(null)}>Cancel</button>
-              <button style={modalStyles.save} onClick={handleSaveRename}>Save changes</button>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={s.btnOutline} onClick={() => setRenamingDoc(null)}>Cancel</button>
+              <button style={s.btnPrimary} onClick={handleSaveRename}>Save</button>
             </div>
           </div>
         </div>
@@ -295,57 +336,54 @@ function PencilIcon({ size = 14, color = "#666" }: { size?: number; color?: stri
   );
 }
 
-const s = {
-  page: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui,-apple-system,sans-serif" } as React.CSSProperties,
+const s: Record<string, React.CSSProperties> = {
+  page: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui,-apple-system,sans-serif" },
 
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 24px", height: 56, background: "#fff", borderBottom: "1px solid #e8e8e8", position: "sticky", top: 0, zIndex: 10 } as React.CSSProperties,
-  headerLeft: { display: "flex", alignItems: "center" } as React.CSSProperties,
-  logoLink: { display: "flex", alignItems: "center", gap: 8, textDecoration: "none" } as React.CSSProperties,
-  logoText: { fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.3 } as React.CSSProperties,
-  newBtn: { fontSize: 13, fontWeight: 600, background: "#111", color: "#fff", padding: "8px 18px", borderRadius: 8, textDecoration: "none" } as React.CSSProperties,
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 24px", height: 56, background: "#fff", borderBottom: "1px solid #e8e8e8", position: "sticky", top: 0, zIndex: 10 },
+  headerLeft: { display: "flex", alignItems: "center" },
+  logoLink: { display: "flex", alignItems: "center", gap: 8, textDecoration: "none" },
+  logoText: { fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.3, fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  newBtn: { fontSize: 13, fontWeight: 600, background: "#111", color: "#fff", padding: "8px 18px", borderRadius: 4, textDecoration: "none", cursor: "pointer", border: "none" },
 
-  wrap: { maxWidth: 1100, margin: "0 auto", padding: "36px 24px 80px" } as React.CSSProperties,
+  wrap: { maxWidth: 1100, margin: "0 auto", padding: "36px 24px 80px" },
 
-  toolbar: { display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 } as React.CSSProperties,
-  searchInput: { width: "100%", maxWidth: 360, border: "1px solid #e8e8e8", borderRadius: 8, padding: "8px 14px", fontSize: 13, color: "#333", outline: "none", fontFamily: "inherit", background: "#fff" } as React.CSSProperties,
-  filterRow: { display: "flex", flexWrap: "wrap", gap: 8 } as React.CSSProperties,
-  filterBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 20, border: "1px solid #e8e8e8", background: "#fff", color: "#666", cursor: "pointer", fontFamily: "inherit" } as React.CSSProperties,
-  filterBtnActive: { background: "#111", color: "#fff", border: "1px solid #111" } as React.CSSProperties,
+  toolbar: { display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 },
+  searchInput: { width: "100%", maxWidth: 360, border: "1px solid #e8e8e8", borderRadius: 4, padding: "8px 14px", fontSize: 13, color: "#333", outline: "none", fontFamily: "inherit", background: "#fff" },
+  filterInput: { padding: "8px 14px", borderRadius: 4, border: "1px solid #e8e8e8", fontSize: 13, outline: "none", width: 200, fontFamily: "inherit" },
+  filterRow: { display: "flex", flexWrap: "wrap", gap: 8 },
+  filterBtn: { fontSize: 12, padding: "5px 14px", borderRadius: 4, border: "1px solid #e8e8e8", background: "#fff", color: "#666", cursor: "pointer", fontFamily: "inherit" },
+  filterBtnActive: { background: "#111", color: "#fff", border: "1px solid #111" },
 
-  centerBox: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" } as React.CSSProperties,
-  spinner: { width: 28, height: 28, border: "2.5px solid #eee", borderTopColor: "#111", borderRadius: "50%", animation: "spin .8s linear infinite" } as React.CSSProperties,
+  centerBox: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" },
+  spinner: { width: 28, height: 28, border: "2.5px solid #eee", borderTopColor: "#111", borderRadius: "50%", animation: "spin .8s linear infinite" },
 
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
     gap: 14,
-  } as React.CSSProperties,
+  },
   card: {
     background: "#fff",
     border: "1px solid #efefef",
-    borderRadius: 12,
+    borderRadius: 4,
     padding: "18px 20px",
     cursor: "pointer",
     transition: "box-shadow .15s, border-color .15s",
-  } as React.CSSProperties,
-  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } as React.CSSProperties,
-  typeBadge: { fontSize: 11, padding: "3px 10px", borderRadius: 20, fontWeight: 500 } as React.CSSProperties,
-  cardDate: { fontSize: 11, color: "#bbb" } as React.CSSProperties,
-  cardName: { fontSize: 17, fontWeight: 700, color: "#111", lineHeight: 1.3, marginBottom: 5 } as React.CSSProperties,
-  cardId: { fontSize: 11, color: "#ccc", fontFamily: "monospace", marginBottom: 6 } as React.CSSProperties,
-  cardSource: { fontSize: 11, color: "#bbb", marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } as React.CSSProperties,
-  cardActions: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid #f5f5f5", marginTop: 4 } as React.CSSProperties,
-  editLink: { fontSize: 13, color: "#111", fontWeight: 600, textDecoration: "none" } as React.CSSProperties,
-  deleteBtn: { fontSize: 12, color: "#c0392b", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" } as React.CSSProperties,
-  deleteBtnDisabled: { fontSize: 12, color: "#bbb", background: "none", border: "none", padding: 0 } as React.CSSProperties,
-};
+  },
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  typeBadge: { fontSize: 11, padding: "3px 10px", borderRadius: 4, fontWeight: 500 },
+  cardDate: { fontSize: 11, color: "#bbb" },
+  cardName: { fontSize: 17, fontWeight: 700, color: "#111", lineHeight: 1.3, marginBottom: 5, fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  cardId: { fontSize: 11, color: "#ccc", fontFamily: "monospace", marginBottom: 6 },
+  cardSource: { fontSize: 11, color: "#bbb", marginBottom: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  cardActions: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, borderTop: "1px solid #f5f5f5", marginTop: 4 },
+  editLink: { fontSize: 13, color: "#111", fontWeight: 600, textDecoration: "none" },
+  deleteBtn: { fontSize: 12, color: "#c0392b", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" },
+  deleteBtnDisabled: { fontSize: 12, color: "#bbb", background: "none", border: "none", padding: 0 },
 
-const modalStyles = {
-  overlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" } as React.CSSProperties,
-  content: { background: "#fff", borderRadius: 12, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" } as React.CSSProperties,
-  title: { fontSize: 16, fontWeight: 700, color: "#111", margin: "0 0 16px" } as React.CSSProperties,
-  input: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit" } as React.CSSProperties,
-  actions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 } as React.CSSProperties,
-  cancel: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
-  save: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 } as React.CSSProperties,
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" },
+  modalContent: { background: "#fff", borderRadius: 4, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" },
+  renameInput: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 4, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit", marginBottom: 12 },
+  btnOutline: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 },
+  btnPrimary: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 },
 };

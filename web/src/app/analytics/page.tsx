@@ -1,244 +1,154 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { listDocuments } from "@/lib/api";
-import { validateDocument } from "@/lib/validation";
+import { getAnalytics } from "@/lib/api";
+import { ActivityBell } from "@/components/ActivityBell";
 
-export default function AnalyticsDashboard() {
+const TYPE_META: Record<string, { label: string, bg: string, color: string }> = {
+  receipt_template: { label: "Receipt Template",    bg: "#EEEDFE", color: "#534AB7" },
+  client_doc:       { label: "Client Proposal",     bg: "#E1F5EE", color: "#0F6E56" },
+  compliance:       { label: "Compliance",          bg: "#FAEEDA", color: "#854F0B" },
+  invoice:          { label: "Invoice",             bg: "#FAECE7", color: "#993C1D" },
+  timeline:         { label: "Timeline",            bg: "#FAECE7", color: "#993C1D" },
+};
+
+export default function Analytics() {
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    listDocuments()
-      .then(res => {
-        const docs = res.data.documents || res.data || [];
-        calculateStats(docs);
-      })
-      .catch(console.error)
+    getAnalytics()
+      .then(res => setData(res.data))
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  const calculateStats = (docs: any[]) => {
-    const now = new Date();
-    
-    // Time boundaries
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start
-    
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-
-    // Aggregators
-    const counts = {
-      total: docs.length,
-      invoice: 0,
-      receipt_template: 0,
-      client_doc: 0,
-      timeline: 0,
-      compliance: 0
-    };
-
-    let today = 0, thisWeek = 0, thisMonth = 0;
-    
-    let totalConfidence = 0;
-    let confidenceCount = 0;
-    let totalWarnings = 0;
-    let textBasedCount = 0;
-    let scannedCount = 0;
-    let totalCharCount = 0;
-
-    docs.forEach(d => {
-      // Type breakdown
-      if (counts[d.template_type as keyof typeof counts] !== undefined) {
-        counts[d.template_type as keyof typeof counts]++;
-      }
-
-      // Time breakdown
-      const createdTime = new Date(d.createdAt).getTime();
-      if (createdTime >= startOfToday) today++;
-      if (createdTime >= startOfWeek.getTime()) thisWeek++;
-      if (createdTime >= startOfMonth) thisMonth++;
-
-      // AI Metrics
-      if (d.content && d.template_type) {
-        const val = validateDocument(d.template_type, d.content);
-        totalConfidence += val.confidenceScore;
-        confidenceCount++;
-        totalWarnings += (val.missingRequired.length + val.missingRecommended.length);
-      }
-
-      // OCR Heuristics (Since we don't track it explicitly yet)
-      // A raw_input with "--- Page X ---" means it came from pdf_reader (likely text-based multi-page or fallback OCR)
-      // If it doesn't have multiple pages and raw_input is short, it might be an image.
-      // We will proxy OCR Usage based on raw_input size and structure for now.
-      const rawText = d.raw_input || "";
-      totalCharCount += rawText.length;
-      if (rawText.includes("--- Page ")) {
-        textBasedCount++;
-      } else if (rawText.length > 0) {
-        scannedCount++;
-      }
-    });
-
-    setStats({
-      counts,
-      usage: { today, thisWeek, thisMonth },
-      ai: {
-        avgConfidence: confidenceCount ? Math.round(totalConfidence / confidenceCount) : 0,
-        totalWarnings,
-        ocrUsage: { text: textBasedCount, scanned: scannedCount }
-      },
-      processing: {
-        // [ARCH-DEBT: MISSING METRICS]
-        // Condition for replacement: These are currently placeholder/derived metrics. 
-        // When real telemetry is added to Firestore (e.g. tracking ms elapsed during generation), replace these.
-        avgGenerationTime: "~6.2s", 
-        avgOcrTime: "~2.4s",
-        exportCount: "Untracked" 
-      }
-    });
-  };
-
-  if (loading) {
+  if (error) {
     return (
       <div style={s.page}>
-        <div style={s.centerBox}>
-          <div style={s.spinner} />
-          <p style={{ fontSize: 14, color: "#888", marginTop: 12 }}>Crunching metrics...</p>
+        <Header />
+        <div style={s.wrap}>
+          <div style={s.centerBox}>
+            <p style={{ color: "#ef4444" }}>Failed to load analytics.</p>
+          </div>
         </div>
       </div>
     );
   }
 
+  // Calculate max count for template bar charts
+  const maxTemplateCount = data?.templates?.length 
+    ? Math.max(...data.templates.map((t: any) => t.count)) 
+    : 0;
+
   return (
     <div style={s.page}>
-      {/* ── Header ── */}
-      <div style={s.header}>
-        <div style={s.headerLeft}>
-          <Link href="/" style={s.logoLink}>
-            <AsteriskIcon size={18} />
-            <span style={s.logoText}>makewithus</span>
-          </Link>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <Link href="/documents" style={s.secondaryBtn}>View documents</Link>
-          <Link href="/" style={s.newBtn}>+ New document</Link>
-        </div>
-      </div>
+      <Header />
 
       <div style={s.wrap}>
-        <h1 style={s.pageTitle}>Operations Dashboard</h1>
-        <p style={s.pageSubtitle}>System performance and generation metrics.</p>
+        <h1 style={s.title}>Analytics</h1>
 
-        {stats && (
-          <div style={s.grid}>
-            {/* ── Document Metrics ── */}
-            <div style={s.card}>
-              <h3 style={s.cardTitle}>Document Metrics</h3>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Total Documents</span>
-                <span style={s.metricValueBold}>{stats.counts.total}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Invoices</span>
-                <span style={s.metricValue}>{stats.counts.invoice}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Receipts</span>
-                <span style={s.metricValue}>{stats.counts.receipt_template}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Client Proposals</span>
-                <span style={s.metricValue}>{stats.counts.client_doc}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Timelines</span>
-                <span style={s.metricValue}>{stats.counts.timeline}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Service Agreements</span>
-                <span style={s.metricValue}>{stats.counts.compliance}</span>
-              </div>
+        {loading ? (
+          <div style={s.skeletonWrapper}>
+            <div style={s.kpiGrid}>
+              {[1, 2, 3].map(i => <div key={i} style={s.skeletonCard} />)}
             </div>
-
-            {/* ── Usage ── */}
-            <div style={s.card}>
-              <h3 style={s.cardTitle}>Usage</h3>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Generated Today</span>
-                <span style={s.metricValueBold}>{stats.usage.today}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>This Week</span>
-                <span style={s.metricValue}>{stats.usage.thisWeek}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>This Month</span>
-                <span style={s.metricValue}>{stats.usage.thisMonth}</span>
-              </div>
-            </div>
-
-            {/* ── AI Metrics ── */}
-            <div style={s.card}>
-              <h3 style={s.cardTitle}>AI Metrics</h3>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Average Confidence</span>
-                <span style={{ ...s.metricValueBold, color: stats.ai.avgConfidence >= 90 ? '#16a34a' : '#ca8a04' }}>
-                  {stats.ai.avgConfidence}%
-                </span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Validation Warnings</span>
-                <span style={s.metricValue}>{stats.ai.totalWarnings}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Text PDF Sources</span>
-                <span style={s.metricValue}>{stats.ai.ocrUsage.text}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Scanned/Image Sources</span>
-                <span style={s.metricValue}>{stats.ai.ocrUsage.scanned}</span>
-              </div>
-            </div>
-
-            {/* ── Processing Performance ── */}
-            <div style={s.card}>
-              <h3 style={s.cardTitle}>Processing</h3>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Avg Generation Time</span>
-                <span style={s.metricValue}>{stats.processing.avgGenerationTime}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Avg OCR Time</span>
-                <span style={s.metricValue}>{stats.processing.avgOcrTime}</span>
-              </div>
-              <div style={s.metricRow}>
-                <span style={s.metricLabel}>Export Count</span>
-                <span style={s.metricValue}>{stats.processing.exportCount}</span>
-              </div>
-            </div>
-
+            <div style={{ ...s.skeletonCard, height: 200, marginTop: 24 }} />
           </div>
+        ) : data?.overview?.totalDocuments === 0 ? (
+          <div style={s.centerBox}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <p style={{ fontSize: 16, fontWeight: 600, color: "#333", marginBottom: 6 }}>
+              No analytics available yet.
+            </p>
+            <p style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
+              Upload your first document to start seeing insights.
+            </p>
+            <Link href="/" style={s.newBtn}>+ New document</Link>
+          </div>
+        ) : (
+          <>
+            {/* KPI Cards */}
+            <div style={s.kpiGrid}>
+              <div style={s.kpiCard}>
+                <div style={s.kpiLabel}>Total Documents</div>
+                <div style={s.kpiValue}>{data.overview.totalDocuments}</div>
+              </div>
+              <div style={s.kpiCard}>
+                <div style={s.kpiLabel}>Created Today</div>
+                <div style={s.kpiValue}>{data.overview.createdToday}</div>
+              </div>
+              <div style={s.kpiCard}>
+                <div style={s.kpiLabel}>Completed Batches</div>
+                <div style={s.kpiValue}>{data.batches.completed}</div>
+              </div>
+            </div>
+
+            {/* Documents by Template */}
+            <div style={s.section}>
+              <h2 style={s.sectionTitle}>Documents by Template</h2>
+              <div style={s.barChartContainer}>
+                {data.templates.map((t: any) => {
+                  const meta = TYPE_META[t.type] || { label: t.type, bg: "#f1f5f9", color: "#64748b" };
+                  const percentage = maxTemplateCount > 0 ? (t.count / maxTemplateCount) * 100 : 0;
+                  
+                  return (
+                    <div key={t.type} style={s.barRow}>
+                      <div style={s.barLabel}>{meta.label}</div>
+                      <div style={s.barTrack}>
+                        <div style={{ ...s.barFill, width: `${percentage}%`, background: meta.bg }} />
+                      </div>
+                      <div style={s.barValue}>{t.count}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Batch Status */}
+            <div style={s.section}>
+              <h2 style={s.sectionTitle}>Batch Status</h2>
+              <div style={{ display: 'flex', gap: 24 }}>
+                <div>
+                  <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>Completed</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: "#10b981" }}>{data.batches.completed}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>Failed</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: "#ef4444" }}>{data.batches.failed}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Last Updated */}
+            <div style={s.lastUpdated}>
+              Last updated: {new Date().toLocaleTimeString()}
+            </div>
+          </>
         )}
       </div>
     </div>
   );
 }
 
-function AsteriskIcon({ size = 18 }: { size?: number }) {
+function Header() {
   return (
-    <img
-      src="/logo.png"
-      alt="makewithus"
-      style={{
-        width: size,
-        height: size,
-        objectFit: "contain",
-      }}
-    />
+    <div style={s.header}>
+      <div style={s.headerLeft}>
+        <Link href="/documents" style={s.logoLink}>
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 6v12M17.196 9 6.804 15M6.804 9l10.392 6" />
+          </svg>
+          <span style={s.logoText}>makewithus</span>
+        </Link>
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <ActivityBell />
+        <Link href="/documents" style={{...s.newBtn, background: '#fff', color: '#111', border: '1px solid #ddd'}}>Back to Documents</Link>
+      </div>
+    </div>
   );
 }
 
@@ -246,23 +156,31 @@ const s: Record<string, React.CSSProperties> = {
   page: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui,-apple-system,sans-serif" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 24px", height: 56, background: "#fff", borderBottom: "1px solid #e8e8e8", position: "sticky", top: 0, zIndex: 10 },
   headerLeft: { display: "flex", alignItems: "center" },
-  logoLink: { display: "flex", alignItems: "center", gap: 8, textDecoration: "none" },
-  logoText: { fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.3 },
-  newBtn: { fontSize: 13, fontWeight: 600, background: "#111", color: "#fff", padding: "8px 18px", borderRadius: 8, textDecoration: "none" },
-  secondaryBtn: { fontSize: 13, fontWeight: 600, background: "#fff", color: "#111", border: "1px solid #ddd", padding: "8px 18px", borderRadius: 8, textDecoration: "none" },
-  wrap: { maxWidth: 1000, margin: "0 auto", padding: "36px 24px 80px" },
-  pageTitle: { fontSize: 24, fontWeight: 700, margin: "0 0 8px 0", color: "#111" },
-  pageSubtitle: { fontSize: 14, color: "#666", margin: "0 0 32px 0" },
+  logoLink: { display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "#111" },
+  logoText: { fontSize: 15, fontWeight: 700, letterSpacing: -0.3, fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  newBtn: { fontSize: 13, fontWeight: 600, background: "#111", color: "#fff", padding: "8px 18px", borderRadius: 4, textDecoration: "none", cursor: "pointer", border: "none" },
+  wrap: { maxWidth: 800, margin: "0 auto", padding: "40px 24px" },
+  title: { fontSize: 24, fontWeight: 700, color: "#111", margin: "0 0 32px 0", fontFamily: '"TT Hoves", system-ui, sans-serif' },
   
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 },
-  card: { background: "#fff", border: "1px solid #efefef", borderRadius: 12, padding: "24px" },
-  cardTitle: { fontSize: 15, fontWeight: 600, color: "#111", margin: "0 0 20px 0", borderBottom: "1px solid #eee", paddingBottom: 12 },
+  centerBox: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center", background: "#fff", borderRadius: 12, border: "1px solid #e8e8e8" },
   
-  metricRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  metricLabel: { fontSize: 14, color: "#555" },
-  metricValue: { fontSize: 14, fontWeight: 500, color: "#111" },
-  metricValueBold: { fontSize: 16, fontWeight: 700, color: "#111" },
-
-  centerBox: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" },
-  spinner: { width: 28, height: 28, border: "2.5px solid #eee", borderTopColor: "#111", borderRadius: "50%", animation: "spin .8s linear infinite" },
+  kpiGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 32 },
+  kpiCard: { background: "#fff", padding: 24, borderRadius: 12, border: "1px solid #e8e8e8", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" },
+  kpiLabel: { fontSize: 13, color: "#64748b", fontWeight: 500, marginBottom: 8 },
+  kpiValue: { fontSize: 32, fontWeight: 700, color: "#111", fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  
+  section: { background: "#fff", padding: 24, borderRadius: 12, border: "1px solid #e8e8e8", boxShadow: "0 1px 3px rgba(0,0,0,0.02)", marginBottom: 24 },
+  sectionTitle: { fontSize: 16, fontWeight: 600, color: "#111", margin: "0 0 20px 0" },
+  
+  barChartContainer: { display: "flex", flexDirection: "column", gap: 16 },
+  barRow: { display: "flex", alignItems: "center", gap: 16 },
+  barLabel: { width: 140, fontSize: 13, fontWeight: 500, color: "#475569" },
+  barTrack: { flex: 1, height: 24, background: "#f8fafc", borderRadius: 4, overflow: "hidden", position: "relative" },
+  barFill: { height: "100%", borderRadius: 4, transition: "width 0.5s ease-out" },
+  barValue: { width: 40, fontSize: 13, fontWeight: 600, color: "#111", textAlign: "right" },
+  
+  lastUpdated: { fontSize: 12, color: "#94a3b8", textAlign: "right", marginTop: 24 },
+  
+  skeletonWrapper: { display: "flex", flexDirection: "column" },
+  skeletonCard: { background: "#e2e8f0", height: 110, borderRadius: 12, animation: "pulse 1.5s infinite ease-in-out" }
 };

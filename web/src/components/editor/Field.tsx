@@ -12,6 +12,8 @@ interface FieldProps {
   rows?: number;
   monospace?: boolean;
   required?: boolean;
+  error?: boolean;
+  autoFocus?: boolean;
 }
 
 export default function Field({
@@ -26,10 +28,13 @@ export default function Field({
   rows = 3,
   monospace = false,
   required = false,
+  error = false,
+  autoFocus = false,
 }: FieldProps) {
   const inputStyle = {
     ...s.input,
     ...(disabled ? s.inputDisabled : {}),
+    ...(error ? s.inputError : {}),
     ...(monospace ? s.inputMonospace : {}),
   };
 
@@ -48,6 +53,7 @@ export default function Field({
           disabled={disabled}
           onChange={(e) => onChange && onChange(e.target.value)}
           rows={rows}
+          autoFocus={autoFocus}
         />
       ) : (
         <input
@@ -57,6 +63,8 @@ export default function Field({
           placeholder={placeholder}
           disabled={disabled}
           onChange={(e) => onChange && onChange(e.target.value)}
+          autoFocus={autoFocus}
+          data-error={error ? "true" : undefined}
         />
       )}
 
@@ -93,13 +101,16 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: "system-ui, sans-serif",
   },
   required: {
-    color: "#e74c3c",
-    fontWeight: 700,
+    color: "#dc2626",
+    fontWeight: 600,
+    marginLeft: 2
   },
   input: {
     width: "100%",
-    border: "1px solid #e8e8e8",
-    borderRadius: 6,
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "#e8e8e8",
+    borderRadius: 4,
     padding: "7px 10px",
     fontSize: 12,
     color: "#333",

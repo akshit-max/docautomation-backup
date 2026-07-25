@@ -49,11 +49,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       updatedContent = calculateReceiptTotals(updatedContent);
     }
 
-    const updates = {
+    const updates: any = {
       content: updatedContent,
       html_content: body.html_content || currentData?.html_content || '',
       updatedAt: new Date().toISOString()
     };
+
+    const newProjectName = updatedContent.project_name || updatedContent.title || updatedContent.subject || updatedContent.for_service || updatedContent.service_name || updatedContent.client_name;
+    if (newProjectName) {
+      updates.project_name = newProjectName;
+    }
 
     await docRef.update(updates);
 

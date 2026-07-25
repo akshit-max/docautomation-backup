@@ -54,18 +54,45 @@ export const uploadPDF = (file: File) => {
   form.append("file", file);
   return client.post("/upload", form, {
     headers: { "Content-Type": "multipart/form-data" },
-    timeout: 90000, // 90s for file upload and OCR
+    timeout: 90000,
   });
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// BATCH UPLOAD (Phase 9)
+// ══════════════════════════════════════════════════════════════════════════
+
+export const createBatch = (totalDocuments: number, templateType: string = "auto") => {
+  return client.post("/batch/create", { totalDocuments, template_type: templateType });
+};
+
+export const uploadBatchFile = (batchId: string, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  // Using a short timeout because this only uploads to staging and creates a task
+  return client.post(`/batch/${batchId}/upload`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 30000,
+  });
+};
+
+export const getBatch = (batchId: string) => {
+  return client.get(`/batch/${batchId}`);
+};
+
+export const cancelBatch = (batchId: string) => {
+  return client.post(`/batch/${batchId}/cancel`);
 };
 
 // ══════════════════════════════════════════════════════════════════════════
 // GENERATE
 // ══════════════════════════════════════════════════════════════════════════
 
-export const generateDoc = async (rawText: string, templateType?: string) => {
+export const generateDoc = async (rawText: string, templateType?: string, sourceFile?: any) => {
   return client.post("/generate", {
     raw_input: rawText,
     template_type: templateType,
+    source_file: sourceFile
   });
 };
 
@@ -82,15 +109,64 @@ export const getDocument = (docId: string) =>
 export const updateDocument = (docId: string, content: any) =>
   client.put(`/doc/${docId}`, { content });
 
-export const listDocuments = () =>
-  client.get("/documents");
+export const listDocuments = (params?: Record<string, string | number | undefined>) => {
+  let queryStr = "";
+  if (params) {
+    const definedParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== undefined && v !== "")
+    );
+    queryStr = "?" + new URLSearchParams(definedParams as any).toString();
+  }
+  return client.get(`/documents${queryStr}`);
+};
 
 export const deleteDocument = (docId: string) =>
   client.delete(`/doc/${docId}`);
 
+export const exportDocument = async (id: string, format = "pdf", type = "document") => {
+  return client.post(`/documents/${id}/export`, { format, type }, { responseType: "blob" });
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// VERSIONS
+// ══════════════════════════════════════════════════════════════════════════
+
+export const getVersions = async (id: string) => {
+  return client.get(`/doc/${id}/versions`);
+};
+
+export const getVersion = async (id: string, versionId: string) => {
+  return client.get(`/doc/${id}/versions/${versionId}`);
+};
+
+export const saveVersion = async (id: string, reason?: string) => {
+  return client.post(`/doc/${id}/versions`, { reason });
+};
+
+export const restoreVersion = async (id: string, versionId: string) => {
+  return client.post(`/doc/${id}/restore`, { versionId });
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// ANALYTICS
+// ══════════════════════════════════════════════════════════════════════════
+
+export const getAnalytics = async () => {
+  return client.get('/analytics');
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// ACTIVITY
+// ══════════════════════════════════════════════════════════════════════════
+
+export const getActivities = async (limit: number = 20) => {
+  return client.get(`/activity?limit=${limit}`);
+};
+
 // ══════════════════════════════════════════════════════════════════════════
 // UTILS
 // ══════════════════════════════════════════════════════════════════════════
+
 
 export const previewUrl = (docId: string) =>
   `${API}/doc/${docId}/preview`;
@@ -103,6 +179,9 @@ export const refillDocument = (docId: string, prompt: string) =>
 
 export const translateDocument = (docId: string, language: string) =>
   client.post(`/doc/${docId}/translate`, { language });
+
+export const summarizeDocument = (docId: string) =>
+  client.post(`/doc/${docId}/summary`);
 
 export const checkHealth = () =>
   axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/`, { timeout: 5000 });

@@ -10,10 +10,12 @@ export interface Suggestion {
   field: string;
   message: string;
   actionLabel: string;
+  originalValue?: string;
+  newValue?: string;
   apply: (content: any) => any;
 }
 
-const REQUIRED_FIELDS: Record<string, {key: string, label: string}[]> = {
+export const REQUIRED_FIELDS: Record<string, {key: string, label: string}[]> = {
   "invoice": [
     { key: "invoice_number", label: "Invoice Number" },
     { key: "date", label: "Date" },
@@ -41,7 +43,7 @@ const REQUIRED_FIELDS: Record<string, {key: string, label: string}[]> = {
   ]
 };
 
-const RECOMMENDED_FIELDS: Record<string, {key: string, label: string}[]> = {
+export const RECOMMENDED_FIELDS: Record<string, {key: string, label: string}[]> = {
   "invoice": [
     { key: "client_phone", label: "Client Phone" },
     { key: "due_date", label: "Due Date" },
@@ -136,8 +138,10 @@ export const validateDocument = (templateType: string, content: any): Validation
       suggestions.push({
         id: 'format-date',
         field: 'date',
-        message: 'Date uses dashes instead of slashes.',
-        actionLabel: 'Use DD/MM/YYYY',
+        message: 'Date format',
+        actionLabel: 'Convert',
+        originalValue: content.date,
+        newValue: content.date.replace(/-/g, '/'),
         apply: (c) => ({ ...c, date: c.date.replace(/-/g, '/') })
       });
     }

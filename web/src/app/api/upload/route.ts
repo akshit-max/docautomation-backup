@@ -1,6 +1,8 @@
+export const maxDuration = 60; // Allow up to 60s for Vercel execution
 import { NextResponse } from 'next/server';
-import { adminStorage } from '@/lib/firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
+import { getStorageProvider } from '@/lib/services/storage';
+import { ActivityService, ActivityTypes } from '@/lib/services/activity/ActivityService';
 
 const classifyDocument = async (text: string): Promise<string> => {
     // If text is too short to classify, default to developer_doc
@@ -86,35 +88,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // 1. Upload file to Firebase Storage (Optional for local dev)
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split('.').pop() || 'pdf';
-    const filename = `${uuidv4()}.${ext}`;
-    
-    if (process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET) {
-      try {
-        const bucket = adminStorage.bucket();
-        const fileRef = bucket.file(`uploads/${filename}`);
-        await fileRef.save(buffer, {
-            contentType: file.type || 'application/pdf',
-            public: false
-        });
-      } catch (storageErr) {
-        console.warn('Firebase Storage upload failed, continuing with in-memory buffer:', storageErr);
-      }
-    } else {
-      console.log('Firebase Storage bucket not configured. Skipping archival upload for local development.');
+    // 1. Validate file size (20MB max) before loading into RAM
+    const MAX_SIZE_MB = 20;
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      return NextResponse.json({ error: `File too large. Maximum is ${MAX_SIZE_MB}MB.` }, { status: 413 });
     }
+
+    // 1.5. Validate MIME type
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      return NextResponse.json({ error: `Unsupported file type: ${file.type}. Please upload PDF, JPEG, or PNG.` }, { status: 415 });
+    }
+
+    // 2. Prepare file buffer
+    const buffer = Buffer.from(await file.arrayBuffer());
     
     // 2. Call Python OCR microservice
     const pythonFormData = new FormData();
     pythonFormData.append('file', new Blob([buffer], { type: file.type }), file.name);
     
-    const pythonUrl = process.env.PYTHON_OCR_URL || 'http://localhost:8000/extract';
+    const pythonUrl = process.env.PYTHON_OCR_URL || 'http://localhost:8000/ocr';
     let ocrResponse;
     try {
         const ocrTimeout = new AbortController();
-        const ocrTimeoutId = setTimeout(() => ocrTimeout.abort(), 90000); // 90s timeout
+        // 55s: fires before Vercel's maxDuration=60s hard kill, ensuring a clean user-facing error
+        const ocrTimeoutId = setTimeout(() => ocrTimeout.abort(), 55000);
 
         ocrResponse = await fetch(pythonUrl, {
             method: 'POST',
@@ -125,15 +123,39 @@ export async function POST(request: Request) {
     } catch (err: any) {
         if (err?.name === 'AbortError') {
             console.error('Python OCR service timed out after 90s');
+            await ActivityService.logActivity({
+                type: ActivityTypes.OCR_FAILED,
+                entityType: 'system',
+                entityId: 'upload',
+                title: file.name,
+                status: 'failed',
+                metadata: { error: 'Timeout' }
+            });
             return NextResponse.json({ error: 'OCR service timed out. The document may be too large.' }, { status: 504 });
         }
         console.error('Failed to reach Python OCR service:', err);
+        await ActivityService.logActivity({
+            type: ActivityTypes.OCR_FAILED,
+            entityType: 'system',
+            entityId: 'upload',
+            title: file.name,
+            status: 'failed',
+            metadata: { error: 'Service Unreachable' }
+        });
         return NextResponse.json({ error: 'OCR service unreachable. Make sure the OCR server is running.' }, { status: 503 });
     }
 
     if (!ocrResponse.ok) {
         const errText = await ocrResponse.text();
         console.error('OCR service error:', errText);
+        await ActivityService.logActivity({
+            type: ActivityTypes.OCR_FAILED,
+            entityType: 'system',
+            entityId: 'upload',
+            title: file.name,
+            status: 'failed',
+            metadata: { error: 'Processing Failed' }
+        });
         try {
             const errObj = JSON.parse(errText);
             return NextResponse.json({ error: errObj.detail || 'OCR processing failed' }, { status: 500 });
@@ -145,16 +167,36 @@ export async function POST(request: Request) {
     const ocrData = await ocrResponse.json();
     const extractedText = ocrData.extracted_text;
 
-    // 3. Classify document
+    // 3. OCR Succeeded -> Archive the file
+    let source_file = null;
+    try {
+        const storage = getStorageProvider();
+        source_file = await storage.upload(buffer, file.name, file.type || 'application/pdf');
+    } catch (storageErr) {
+        console.error('Storage upload failed, continuing without archival:', storageErr);
+    }
+
+    // 4. Classify document
     const detectedType = await classifyDocument(extractedText);
 
-    // 4. Return to frontend matching exact UploadResponse format
+    // 5. Return to frontend matching exact UploadResponse format
     const responsePayload = {
-        filename: filename,
+        filename: file.name,
         extracted_text: extractedText,
         detected_type: detectedType,
-        char_count: extractedText.length
+        char_count: extractedText.length,
+        source_file
     };
+    
+    await ActivityService.logActivity({
+        type: ActivityTypes.OCR_COMPLETED,
+        entityType: 'system',
+        entityId: 'upload',
+        title: file.name,
+        status: 'success',
+        metadata: { char_count: extractedText.length, detected_type: detectedType }
+    });
+
     console.log(`[Upload] Success: ${detectedType}, chars=${extractedText.length}`);
     return NextResponse.json(responsePayload);
   } catch (error: any) {

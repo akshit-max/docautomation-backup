@@ -9,7 +9,7 @@ IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/tiff", "image/bmp"
 ALL_ALLOWED = PDF_TYPES | IMAGE_TYPES
 MAX_SIZE_MB = 20
 
-@router.post("/extract")
+@router.post("/ocr")
 async def extract_file(file: UploadFile = File(...)):
     import traceback
     try:
