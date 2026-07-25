@@ -3,12 +3,12 @@
 import React from "react";
 
 const STEPS = [
-  { key: "uploading", label: "Uploading Document" },
-  { key: "ocr", label: "Extracting Text (OCR)" },
-  { key: "classifying", label: "Classifying Document" },
-  { key: "generating", label: "Generating Structured Data" },
-  { key: "saving", label: "Saving Document" },
-  { key: "done", label: "Document Ready" },
+  { key: "uploading", label: "Uploading" },
+  { key: "ocr", label: "Extracting Text" },
+  { key: "classifying", label: "Classifying" },
+  { key: "generating", label: "AI Structuring" },
+  { key: "saving", label: "Saving Doc" },
+  { key: "done", label: "Ready!" },
 ];
 
 interface ProcessingTimelineProps {
@@ -16,7 +16,6 @@ interface ProcessingTimelineProps {
 }
 
 export function ProcessingTimeline({ currentPhase }: ProcessingTimelineProps) {
-  // Find the index of the current phase. If not found or 'idle', it's -1.
   const currentIndex = STEPS.findIndex((s) => s.key === currentPhase);
 
   return (
@@ -24,29 +23,23 @@ export function ProcessingTimeline({ currentPhase }: ProcessingTimelineProps) {
       <h3 style={s.title}>Processing Document</h3>
       <div style={s.timeline}>
         {STEPS.map((step, index) => {
-          // 'done' is just for the final momentary state. We can render it or skip it based on index.
-          // Let's actually include "done" in the steps array for the UX polish, or we can just treat the final phase as 'done'.
-          // Wait, the user specifically mentioned 5 steps in the prompt: Uploading, OCR, Classifying, Generating, Saving.
-          // And then "Document Ready" after. Let's just exclude 'done' from the visual timeline until it is actually done, or we can include it as the final step.
-          // I will include "done" but if current phase is before it, it just looks pending.
-
-          // Skip rendering 'idle' or unmapped phases.
           if (step.key === "idle") return null;
 
           const isCompleted = currentIndex > index || currentPhase === "done";
           const isActive = currentPhase === step.key;
-          const isPending = !isCompleted && !isActive;
-
-          // For the final step 'done', we only want to show it if it's active/completed, 
-          // or we can just keep it in the list. The user said: "After the final step completes, briefly display ... 🎉 Document Ready".
-          if (step.key === "done" && !isCompleted && !isActive) {
-             // Let's hide the "Document Ready" step until it's actually reached, to keep the timeline clean.
-             // Or we can show it as pending. It's usually better to show it as the finish line.
-             // Let's show it.
-          }
 
           return (
-            <div key={step.key} style={s.stepRow}>
+            <div key={step.key} style={s.stepCol}>
+              {/* Horizontal line connecting steps */}
+              {index < STEPS.length - 1 && (
+                <div
+                  style={{
+                    ...s.connector,
+                    background: isCompleted ? "#10b981" : "#e2e8f0",
+                  }}
+                />
+              )}
+
               <div style={s.iconWrapper}>
                 {isCompleted ? (
                   <div style={s.completedIcon}>✔</div>
@@ -55,21 +48,13 @@ export function ProcessingTimeline({ currentPhase }: ProcessingTimelineProps) {
                 ) : (
                   <div style={s.pendingDot} />
                 )}
-                {/* Vertical line connecting steps */}
-                {index < STEPS.length - 1 && (
-                  <div
-                    style={{
-                      ...s.connector,
-                      background: isCompleted ? "#10b981" : "#e2e8f0",
-                    }}
-                  />
-                )}
               </div>
+
               <div
                 style={{
                   ...s.label,
-                  color: isCompleted ? "#10b981" : isActive ? "#111" : "#94a3b8",
-                  fontWeight: isActive ? 600 : 500,
+                  color: isCompleted ? "#10b981" : isActive ? "#0f172a" : "#94a3b8",
+                  fontWeight: isActive || isCompleted ? 600 : 500,
                 }}
               >
                 {step.label}
@@ -87,76 +72,93 @@ const s: Record<string, React.CSSProperties> = {
     background: "#fff",
     border: "1px solid #e2e8f0",
     borderRadius: 12,
-    padding: "24px 32px",
+    padding: "28px 36px 32px",
     width: "100%",
-    maxWidth: 400,
-    margin: "0 auto",
-    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+    maxWidth: 760,
+    margin: "16px auto",
+    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02)",
   },
   title: {
-    margin: "0 0 20px 0",
+    margin: "0 0 28px 0",
     fontSize: 16,
-    fontWeight: 600,
+    fontWeight: 700,
     color: "#0f172a",
     textAlign: "center",
+    fontFamily: '"TT Hoves", system-ui, sans-serif',
+    letterSpacing: -0.3,
   },
   timeline: {
     display: "flex",
-    flexDirection: "column",
-    gap: 0,
-  },
-  stepRow: {
-    display: "flex",
+    flexDirection: "row",
     alignItems: "flex-start",
-    gap: 16,
+    justifyContent: "space-between",
+    width: "100%",
     position: "relative",
   },
-  iconWrapper: {
+  stepCol: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    width: 24,
-    height: 48, // Gives space for the connector
+    flex: 1,
+    position: "relative",
+    textAlign: "center",
+    padding: "0 4px",
+  },
+  connector: {
+    position: "absolute",
+    top: 14,
+    left: "calc(50% + 18px)",
+    right: "calc(-50% + 18px)",
+    height: 2.5,
+    borderRadius: 2,
+    transition: "background 0.3s ease",
+    zIndex: 1,
+  },
+  iconWrapper: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 30,
+    height: 30,
+    marginBottom: 10,
+    position: "relative",
+    zIndex: 2,
+    background: "#fff",
   },
   completedIcon: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: "50%",
     background: "#10b981",
     color: "#fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "bold",
-    zIndex: 2,
+    boxShadow: "0 2px 6px rgba(16, 185, 129, 0.3)",
+    transition: "all 0.3s ease",
   },
   spinner: {
-    width: 20,
-    height: 20,
-    border: "2px solid #e2e8f0",
-    borderTopColor: "#3b82f6",
+    width: 24,
+    height: 24,
+    border: "2.5px solid #e2e8f0",
+    borderTopColor: "#0f172a",
     borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-    zIndex: 2,
-    marginTop: 2,
+    animation: "spin 0.8s linear infinite",
   },
   pendingDot: {
-    width: 10,
-    height: 10,
+    width: 12,
+    height: 12,
     borderRadius: "50%",
     background: "#cbd5e1",
-    zIndex: 2,
-    marginTop: 7,
-  },
-  connector: {
-    width: 2,
-    flex: 1,
-    marginTop: 4,
-    marginBottom: 4,
+    transition: "background 0.3s ease",
   },
   label: {
-    fontSize: 14,
-    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 1.3,
+    transition: "color 0.3s ease",
+    maxWidth: 90,
+    margin: "0 auto",
   },
 };

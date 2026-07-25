@@ -196,6 +196,7 @@ export function useEditorState(id: string) {
       await updateDocument(id, gc);
       setPreviewKey((k) => k + 1); // refresh preview after AI fill
       setDirty(false);
+      alert("Document successfully generated!");
     } catch (err: any) {
       alert(err?.response?.data?.detail || err.message || "Generation failed");
       throw err;
