@@ -18,7 +18,7 @@ import { AiValidationPanel } from "@/components/editor/AiValidationPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { DocumentPreview } from "@/components/editor/DocumentPreview";
 import { saveVersion } from "@/lib/api";
-import { Clock, MessageSquareText, Sparkles, Languages, Maximize, Download, Share2, ExternalLink, Save, Play, Mic, ChevronDown } from "lucide-react";
+import { Clock, MessageSquareText, Sparkles, Languages, Maximize, Download, Share2, ExternalLink, Save, Play, Mic, ChevronDown, FileText, FileCode, FileSpreadsheet } from "lucide-react";
 import ChatPanel from "./ChatPanel";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -138,15 +138,16 @@ export default function DocumentEditor() {
       const res = await translateDocument(id, selectedLanguage);
       const newContent = res.data.content;
       if (newContent && typeof newContent === "object") {
-        // Directly update content — no second AI call needed
+        // Backend already saved to Firestore — just update local state + refresh preview
         for (const [k, v] of Object.entries(newContent)) {
           updateField(k, v);
         }
-        // Save the translated content immediately
-        await handleSave();
+        // No need to call handleSave() again — backend already persisted the translation
+        alert("Document successfully translated!");
       }
-    } catch {
-      alert("Translation failed. Please try again.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Translation failed. Please try again.";
+      alert(`Error: ${msg}`);
     } finally {
       setTranslating(false);
     }
@@ -157,11 +158,17 @@ export default function DocumentEditor() {
     setSummarizing(true);
     try {
       const res = await summarizeDocument(id);
-      if (res.data?.summary) {
-        updateField('summary', res.data.summary);
+      if (res.data && res.data.summary !== undefined && res.data.summary.trim() !== '') {
+        updateField('summary', res.data.summary.trim());
+        // Explicitly save so summary is persisted immediately (not just debounced)
+        await handleSave();
+        alert("AI summary successfully generated!");
+      } else {
+        alert("Error: AI returned an empty summary. Please try again.");
       }
-    } catch {
-      alert("Summary generation failed. Please try again.");
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || "Summary generation failed. Please try again.";
+      alert(`Error: ${msg}`);
     } finally {
       setSummarizing(false);
     }
@@ -312,16 +319,16 @@ export default function DocumentEditor() {
                 <div style={s.dropdownOverlay} onClick={() => setExportOpen(false)} />
                 <div style={s.dropdownMenu}>
                   <button style={s.dropdownItem} onClick={() => { setExportOpen(false); handleDownloadPDF(); }}>
-                    📄 Export as PDF
+                    <FileText size={15} color="#475569" /> Export as PDF
                   </button>
                   <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=json`} download onClick={() => setExportOpen(false)}>
-                    💻 Export as JSON
+                    <FileCode size={15} color="#475569" /> Export as JSON
                   </a>
                   <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=csv`} download onClick={() => setExportOpen(false)}>
-                    📝 Export as CSV
+                    <FileText size={15} color="#475569" /> Export as CSV
                   </a>
                   <a style={s.dropdownItem} href={`/api/doc/${id}/export?format=excel`} download onClick={() => setExportOpen(false)}>
-                    📊 Export as Excel
+                    <FileSpreadsheet size={15} color="#475569" /> Export as Excel
                   </a>
                 </div>
               </>
@@ -457,26 +464,7 @@ export default function DocumentEditor() {
             </button>
           </div>
 
-          {/* Card 3: AI Summary */}
-          <div style={s.card}>
-            <h3 style={s.cardTitle}>
-              AI Summary
-            </h3>
-            <textarea
-              style={s.promptTextarea as React.CSSProperties}
-              rows={3}
-              placeholder="Generate a concise overview..."
-              value={content?.summary || ""}
-              onChange={(e) => updateField('summary', e.target.value)}
-            />
-            <button
-              style={summarizing ? s.btnGeneratingFull : s.btnGeneratePurple}
-              onClick={handleSummarize}
-              disabled={summarizing}
-            >
-              <Play size={14} style={{ marginRight: 6 }} /> {summarizing ? "Summarizing..." : "Generate Summary"}
-            </button>
-          </div>
+
 
           {/* Card 4: AI Validation */}
           {doc.template_type && (
@@ -650,16 +638,17 @@ const s: Record<string, React.CSSProperties> = {
     position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99
   },
   dropdownMenu: {
-    position: "absolute", top: "100%", left: 0, marginTop: 4,
-    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6,
-    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
-    zIndex: 100, minWidth: 160, display: "flex", flexDirection: "column",
-    padding: "4px 0",
+    position: "absolute", top: "100%", left: 0, marginTop: 6,
+    background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8,
+    boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05)",
+    zIndex: 100, minWidth: 180, display: "flex", flexDirection: "column",
+    padding: "6px 0",
   },
   dropdownItem: {
-    padding: "8px 16px", background: "none", border: "none",
-    textAlign: "left", fontSize: 13, color: "#1e293b", cursor: "pointer",
-    display: "flex", alignItems: "center", gap: 8, textDecoration: "none"
+    padding: "9px 16px", background: "none", border: "none",
+    textAlign: "left", fontSize: 13, fontWeight: 500, color: "#1e293b", cursor: "pointer",
+    display: "flex", alignItems: "center", gap: 10, textDecoration: "none",
+    transition: "background 0.15s",
   },
   btnPrimary: {
     fontSize: 13, fontWeight: 600, background: "#1e293b", color: "#fff",
@@ -691,7 +680,7 @@ const s: Record<string, React.CSSProperties> = {
   promptTextarea: {
     width: "100%", border: "1px solid #e2e8f0", borderRadius: 4, padding: "10px 12px",
     fontSize: 13, color: "#334155", outline: "none", fontFamily: "inherit",
-    lineHeight: 1.5, resize: "vertical", background: "#fafafa", height: "100px",
+    lineHeight: 1.5, resize: "none", background: "#f8fafc", height: "100px",
   },
   btnGeneratePurple: {
     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -758,6 +747,20 @@ const s: Record<string, React.CSSProperties> = {
 
 const voiceWrap: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 8, padding: "12px 16px" };
 const transcriptBox: React.CSSProperties = { fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 4, padding: "8px 10px", lineHeight: 1.5 };
+const summaryDisplayBox: React.CSSProperties = {
+  fontSize: 13, color: "#334155", background: "#f8fafc", borderRadius: 6,
+  padding: "12px 14px", lineHeight: 1.7, border: "1px solid #e2e8f0",
+  fontStyle: "italic",
+};
+const summaryEmptyBox: React.CSSProperties = {
+  fontSize: 12, color: "#94a3b8", background: "#f8fafc", borderRadius: 6,
+  padding: "14px", lineHeight: 1.6, border: "1px dashed #cbd5e1",
+  textAlign: "center",
+};
+const summaryLoadingBox: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 10, background: "#f8fafc",
+  borderRadius: 6, padding: "14px", border: "1px solid #e2e8f0",
+};
 const pulseDot: React.CSSProperties = { width: 10, height: 10, borderRadius: "50%", background: "#e74c3c", animation: "pulse 1s ease infinite" };
 const voiceBtnStart: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 600, color: "#fff", background: "#111", border: "none", borderRadius: 4, padding: "12px 0", cursor: "pointer", transition: "all 0.2s" };
 const voiceBtnStop: React.CSSProperties = { width: "100%", fontSize: 13, fontWeight: 700, color: "#fff", background: "#e74c3c", border: "none", borderRadius: 4, padding: "12px 0", cursor: "pointer", transition: "all 0.2s", boxShadow: "0 2px 8px rgba(231,76,60,0.35)" };

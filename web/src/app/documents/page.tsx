@@ -7,11 +7,11 @@ import { ActivityBell } from "@/components/ActivityBell";
 import { listDocuments, deleteDocument } from "@/lib/api";
 
 const TYPE_META: Record<string, { label: string, icon: string, bg: string, color: string }> = {
-  receipt_template: { label: "Receipt Template",    icon: "⚙️", bg: "#EEEDFE", color: "#534AB7" },
-  client_doc:       { label: "Client Proposal",     icon: "📋", bg: "#E1F5EE", color: "#0F6E56" },
-  compliance:       { label: "Compliance",          icon: "📄", bg: "#FAEEDA", color: "#854F0B" },
-  invoice:          { label: "Invoice",             icon: "🧾", bg: "#FAECE7", color: "#993C1D" },
-  timeline:         { label: "Timeline",            icon: "🧾", bg: "#FAECE7", color: "#993C1D" },
+  receipt_template: { label: "Receipt Template", icon: "⚙️", bg: "#EEEDFE", color: "#534AB7" },
+  client_doc: { label: "Client Proposal", icon: "📋", bg: "#E1F5EE", color: "#0F6E56" },
+  compliance: { label: "Compliance", icon: "📄", bg: "#FAEEDA", color: "#854F0B" },
+  invoice: { label: "Invoice", icon: "🧾", bg: "#FAECE7", color: "#993C1D" },
+  timeline: { label: "Timeline", icon: "🧾", bg: "#FAECE7", color: "#993C1D" },
 };
 
 export default function Documents() {
@@ -26,7 +26,7 @@ export default function Documents() {
   // Pagination & Filtering state
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  
+
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -75,8 +75,8 @@ export default function Documents() {
       });
   };
 
-  useEffect(() => { 
-    load(true); 
+  useEffect(() => {
+    load(true);
   }, [debouncedSearch, filterType, filterClient]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
@@ -101,18 +101,18 @@ export default function Documents() {
       setRenamingDoc(null);
       return;
     }
-    
+
     // Optimistic update
     setDocs(prev => prev.map(d => d.id === renamingDoc.id ? { ...d, project_name: newName } : d));
     const docToUpdate = renamingDoc;
     setRenamingDoc(null);
-    
+
     try {
       let key = "project_name";
       if (docToUpdate.template_type === "compliance") key = "client_name";
       if (docToUpdate.template_type === "receipt_template") key = "for_service";
       if (docToUpdate.template_type === "developer_doc") key = "title";
-      
+
       const { updateDocument } = await import('@/lib/api');
       await updateDocument(docToUpdate.id, { ...(docToUpdate.content || {}), [key]: newName });
     } catch (err) {
@@ -142,7 +142,7 @@ export default function Documents() {
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <ActivityBell />
-          <Link href="/analytics" style={{...s.newBtn, background: '#fff', color: '#111', border: '1px solid #ddd'}}>Analytics</Link>
+          <Link href="/analytics" style={{ ...s.newBtn, background: '#fff', color: '#111', border: '1px solid #ddd' }}>Analytics</Link>
           <Link href="/" style={s.newBtn}>+ New document</Link>
         </div>
       </div>
@@ -168,7 +168,7 @@ export default function Documents() {
               </button>
             ))}
           </div>
-          
+
           <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
             <input
               style={s.filterInput as React.CSSProperties}
@@ -194,8 +194,8 @@ export default function Documents() {
           <div style={s.centerBox}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
             <p style={{ fontSize: 16, fontWeight: 600, color: "#333", marginBottom: 6 }}>
-              {!search && filterType === "all" && !filterClient 
-                ? "No documents yet" 
+              {!search && filterType === "all" && !filterClient
+                ? "No documents yet"
                 : "No matching documents"}
             </p>
             {!search && filterType === "all" && !filterClient ? (
@@ -291,14 +291,14 @@ export default function Documents() {
         <div style={s.modalOverlay} onClick={() => setRenamingDoc(null)}>
           <div style={s.modalContent} onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 16px 0", fontSize: 16 }}>Rename Document</h3>
-            <input 
+            <input
               autoFocus
               style={s.renameInput as React.CSSProperties}
               value={renameInput}
               onChange={e => setRenameInput(e.target.value)}
               onKeyDown={e => {
-                 if (e.key === 'Enter') handleSaveRename();
-                 if (e.key === 'Escape') setRenamingDoc(null);
+                if (e.key === 'Enter') handleSaveRename();
+                if (e.key === 'Escape') setRenamingDoc(null);
               }}
             />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -330,8 +330,8 @@ function AsteriskIcon({ size = 18 }: { size?: number }) {
 function PencilIcon({ size = 14, color = "#666" }: { size?: number; color?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/>
-      <path d="m15 5 4 4"/>
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+      <path d="m15 5 4 4" />
     </svg>
   );
 }

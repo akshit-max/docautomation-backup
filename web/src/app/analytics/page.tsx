@@ -51,11 +51,9 @@ export default function Analytics() {
         <h1 style={s.title}>Analytics</h1>
 
         {loading ? (
-          <div style={s.skeletonWrapper}>
-            <div style={s.kpiGrid}>
-              {[1, 2, 3].map(i => <div key={i} style={s.skeletonCard} />)}
-            </div>
-            <div style={{ ...s.skeletonCard, height: 200, marginTop: 24 }} />
+          <div style={s.centerBox}>
+            <div style={s.spinner} />
+            <p style={{ fontSize: 14, color: "#888", marginTop: 12 }}>Loading analytics...</p>
           </div>
         ) : data?.overview?.totalDocuments === 0 ? (
           <div style={s.centerBox}>
@@ -180,7 +178,5 @@ const s: Record<string, React.CSSProperties> = {
   barValue: { width: 40, fontSize: 13, fontWeight: 600, color: "#111", textAlign: "right" },
   
   lastUpdated: { fontSize: 12, color: "#94a3b8", textAlign: "right", marginTop: 24 },
-  
-  skeletonWrapper: { display: "flex", flexDirection: "column" },
-  skeletonCard: { background: "#e2e8f0", height: 110, borderRadius: 12, animation: "pulse 1.5s infinite ease-in-out" }
+  spinner: { width: 28, height: 28, border: "2.5px solid #eee", borderTopColor: "#111", borderRadius: "50%", animation: "spin .8s linear infinite" }
 };
