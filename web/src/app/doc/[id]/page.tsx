@@ -394,13 +394,6 @@ export default function DocumentEditor() {
             <Save size={14} style={{ marginRight: 6 }} /> {savingSnapshot ? "Saving..." : "Save Snapshot"}
           </button>
           <button
-            style={historyOpen ? { ...s.btnOutline, background: "#f1f5f9" } : s.btnOutline}
-            onClick={() => setHistoryOpen(true)}
-          >
-            <Clock size={14} style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
-            History
-          </button>
-          <button
             style={chatOpen ? { ...s.btnOutline, background: "#f1f5f9" } : s.btnOutline}
             onClick={() => setChatOpen(!chatOpen)}
           >
@@ -563,17 +556,6 @@ export default function DocumentEditor() {
 
         {/* === Right preview === */}
         <div style={s.rightPanel}>
-          {previewVersion && (
-            <div style={s.previewBanner}>
-              <span style={s.previewBannerText}>
-                <strong>Viewing Version {previewVersion.versionNumber} (Read-Only)</strong> — Created {new Date(previewVersion.createdAt).toLocaleString()}
-              </span>
-              <button style={s.btnPrimary} onClick={() => setPreviewVersion(null)}>
-                Exit Preview
-              </button>
-            </div>
-          )}
-          
           <DocumentPreview 
             url={previewRouteUrl(id, previewVersion?.id)}
             onDownload={handleDownloadPDF}
@@ -610,17 +592,6 @@ export default function DocumentEditor() {
           </div>
         </div>
       )}
-
-      <HistoryPanel
-        docId={id}
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        onPreview={(version) => setPreviewVersion(version)}
-        onRestored={() => {
-          // Force a full reload to get the newly restored document state from backend
-          window.location.reload();
-        }}
-      />
     </div>
   );
 }
