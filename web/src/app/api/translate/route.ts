@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
+import { ActivityService } from '@/lib/services/activity/ActivityService';
 
 export async function POST(request: Request) {
   try {
@@ -77,6 +78,13 @@ ${JSON.stringify(docData?.content || {})}`
       content: translatedContent,
       updatedAt: new Date().toISOString()
     });
+
+    await ActivityService.logTranslationCompleted(
+      doc_id,
+      docData?.project_name || docData?.title || 'Translated Document',
+      'system',
+      { language: lang, model: openrouterPayload.model }
+    );
 
     return NextResponse.json({ id: doc_id, content: translatedContent });
   } catch (error) {

@@ -46,14 +46,12 @@ export async function POST(request: Request) {
 
     const docRef = await adminDb.collection('documents').add(docData);
 
-    await ActivityService.logActivity({
-      type: ActivityTypes.DOCUMENT_CREATED,
-      entityType: 'document',
-      entityId: docRef.id,
-      title: docData.project_name,
-      status: 'success',
-      metadata: { template_type: docData.template_type }
-    });
+    await ActivityService.logDocumentCreated(
+      docRef.id,
+      docData.project_name || 'Untitled Document',
+      'system',
+      { template_type: docData.template_type }
+    );
 
     return NextResponse.json({ id: docRef.id, ...docData });
   } catch (error) {
