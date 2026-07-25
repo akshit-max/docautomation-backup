@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { AlertCircle, CheckCircle, Info, X } from "lucide-react";
+import { AlertCircle, CheckCircle, Info, X, AlertTriangle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { ToastType } from "@/lib/notify";
 
-interface Toast {
-  id: number;
+interface ToastItem {
+  id: string | number;
   message: string;
-  type: "info" | "success" | "error";
+  type: ToastType;
+  duration?: number;
+  details?: string;
 }
 
 interface ConfirmState {
@@ -21,7 +24,8 @@ interface PromptState {
 }
 
 export default function GlobalPopup() {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [expandedToasts, setExpandedToasts] = useState<Record<string | number, boolean>>({});
   const [confirmData, setConfirmData] = useState<ConfirmState | null>(null);
   const [promptData, setPromptData] = useState<PromptState | null>(null);
   const [promptValue, setPromptValue] = useState("");
@@ -29,17 +33,27 @@ export default function GlobalPopup() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Overriding native alert
+    // Overriding native alert to route through our Notification Design System
     window.alert = (message: string) => {
-      const type =
-        message.toLowerCase().includes("fail") || message.toLowerCase().includes("error")
-          ? "error"
-          : message.toLowerCase().includes("success") || message.toLowerCase().includes("restore")
-          ? "success"
-          : "info";
+      const lower = message.toLowerCase();
+      let type: ToastType = "info";
+      let duration = 4000;
 
-      const event = new CustomEvent("show-alert", { detail: { message, type } });
-      window.dispatchEvent(event);
+      if (lower.includes("fail") || lower.includes("error") || lower.includes("couldn't") || lower.includes("unable")) {
+        type = "error";
+        duration = 6000;
+      } else if (lower.includes("success") || lower.includes("generated") || lower.includes("translated") || lower.includes("restored") || lower.includes("saved")) {
+        type = "success";
+        duration = 4000;
+      } else if (lower.includes("warning") || lower.includes("no changes") || lower.includes("disabled") || lower.includes("no searchable text")) {
+        type = "warning";
+        duration = 5000;
+      } else if (lower.includes("loading...") || lower.includes("uploading...") || lower.includes("extracting...") || lower.includes("generating...") || lower.includes("translating...") || lower.includes("exporting...")) {
+        type = "loading";
+        duration = 0; // infinite until dismissed or replaced
+      }
+
+      window.dispatchEvent(new CustomEvent("show-toast", { detail: { id: Date.now() + Math.random(), message, type, duration } }));
     };
 
     // Overriding native confirm
@@ -64,15 +78,30 @@ export default function GlobalPopup() {
   }, []);
 
   useEffect(() => {
-    const handleAlert = (e: Event) => {
-      const { message, type } = (e as CustomEvent).detail;
-      const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id, message, type }]);
+    const handleToast = (e: Event) => {
+      const { id, message, type, duration = 4000, details } = (e as CustomEvent).detail;
+      const toastId = id ?? (Date.now() + Math.random());
 
-      // Auto-remove after 4 seconds
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 4000);
+      setToasts((prev) => {
+        // If replacing an existing toast (e.g. loading -> success), update it in place
+        const exists = prev.some((t) => t.id === toastId);
+        if (exists) {
+          return prev.map((t) => (t.id === toastId ? { id: toastId, message, type, duration, details } : t));
+        }
+        return [...prev, { id: toastId, message, type, duration, details }];
+      });
+
+      // Auto-remove if duration > 0 (loading toasts with duration 0 stay until replaced/dismissed)
+      if (duration > 0) {
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== toastId));
+        }, duration);
+      }
+    };
+
+    const handleDismissToast = (e: Event) => {
+      const { id } = (e as CustomEvent).detail;
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     };
 
     const handleConfirm = (e: Event) => {
@@ -86,16 +115,22 @@ export default function GlobalPopup() {
       setPromptValue(defaultValue);
     };
 
-    window.addEventListener("show-alert", handleAlert);
+    window.addEventListener("show-toast", handleToast);
+    window.addEventListener("dismiss-toast", handleDismissToast);
     window.addEventListener("show-confirm", handleConfirm);
     window.addEventListener("show-prompt", handlePrompt);
 
     return () => {
-      window.removeEventListener("show-alert", handleAlert);
+      window.removeEventListener("show-toast", handleToast);
+      window.removeEventListener("dismiss-toast", handleDismissToast);
       window.removeEventListener("show-confirm", handleConfirm);
       window.removeEventListener("show-prompt", handlePrompt);
     };
   }, []);
+
+  const toggleExpand = (id: string | number) => {
+    setExpandedToasts((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleConfirmClose = (result: boolean) => {
     if (confirmData) {
@@ -114,22 +149,51 @@ export default function GlobalPopup() {
 
   return (
     <>
-      {/* ── Toast Containers (Hover Popups) ── */}
+      {/* ── Toast Containers (Notification Design System) ── */}
       <div style={styles.toastContainer}>
-        {toasts.map((t) => (
-          <div key={t.id} style={{ ...styles.toast, ...styles[t.type] }}>
-            {t.type === "success" && <CheckCircle size={16} color="#16a34a" />}
-            {t.type === "error" && <AlertCircle size={16} color="#dc2626" />}
-            {t.type === "info" && <Info size={16} color="#2563eb" />}
-            <span style={styles.toastMessage}>{t.message}</span>
-            <button
-              onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
-              style={styles.closeBtn}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
+        {toasts.map((t) => {
+          const isExpanded = !!expandedToasts[t.id];
+          return (
+            <div key={t.id} style={{ ...styles.toast, ...styles[t.type] }}>
+              <div style={styles.toastHeader}>
+                <div style={styles.iconWrapper}>
+                  {t.type === "success" && <CheckCircle size={18} color="#16a34a" />}
+                  {t.type === "loading" && <Loader2 size={18} color="#3b82f6" style={{ animation: "spin 1s linear infinite" }} />}
+                  {t.type === "error" && <AlertCircle size={18} color="#dc2626" />}
+                  {t.type === "warning" && <AlertTriangle size={18} color="#d97706" />}
+                  {t.type === "info" && <Info size={18} color="#2563eb" />}
+                </div>
+                
+                <div style={styles.contentWrapper}>
+                  <span style={styles.toastMessage}>{t.message}</span>
+                  {t.details && (
+                    <button onClick={() => toggleExpand(t.id)} style={styles.detailsToggle}>
+                      {isExpanded ? (
+                        <>Hide Details <ChevronUp size={12} /></>
+                      ) : (
+                        <>View Details <ChevronDown size={12} /></>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
+                  style={styles.closeBtn}
+                  aria-label="Close notification"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {t.details && isExpanded && (
+                <div style={styles.detailsBox}>
+                  <code>{t.details}</code>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* ── Confirm Popup Overlay ── */}
@@ -192,27 +256,74 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 12,
     pointerEvents: "none",
-    maxWidth: 380,
+    maxWidth: 400,
     width: "100%",
   },
   toast: {
     pointerEvents: "auto",
     display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "12px 16px",
-    borderRadius: 6,
+    flexDirection: "column",
+    gap: 8,
+    padding: "14px 16px",
+    borderRadius: 8,
     borderWidth: 1,
     borderStyle: "solid",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.04)",
     animation: "slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+    backgroundColor: "#ffffff",
+    transition: "all 0.2s ease",
+  },
+  toastHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+    width: "100%",
+  },
+  iconWrapper: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  contentWrapper: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    flex: 1,
   },
   toastMessage: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: 500,
     color: "#0f172a",
-    flex: 1,
-    lineHeight: 1.4,
+    lineHeight: 1.45,
+  },
+  detailsToggle: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    color: "#64748b",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    width: "fit-content",
+    marginTop: 2,
+  },
+  detailsBox: {
+    backgroundColor: "rgba(0, 0, 0, 0.04)",
+    padding: "8px 10px",
+    borderRadius: 6,
+    fontSize: 11.5,
+    fontFamily: "monospace",
+    color: "#334155",
+    maxHeight: 120,
+    overflowY: "auto",
+    wordBreak: "break-all",
+    marginTop: 4,
+    border: "1px solid rgba(0,0,0,0.06)",
   },
   closeBtn: {
     background: "none",
@@ -224,6 +335,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 4,
+    flexShrink: 0,
+    transition: "color 0.15s, background-color 0.15s",
   },
   info: {
     backgroundColor: "#eff6ff",
@@ -236,6 +349,14 @@ const styles: Record<string, React.CSSProperties> = {
   error: {
     backgroundColor: "#fef2f2",
     borderColor: "#fec2d2",
+  },
+  warning: {
+    backgroundColor: "#fffbeb",
+    borderColor: "#fde68a",
+  },
+  loading: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#cbd5e1",
   },
   overlay: {
     position: "fixed",

@@ -1,31 +1,71 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { getActivities } from '@/lib/api';
 import Link from 'next/link';
+import { 
+  Upload, 
+  Pencil, 
+  History, 
+  RotateCcw, 
+  Languages, 
+  Sparkles, 
+  MessageSquare, 
+  Download, 
+  Bell, 
+  ArrowRight,
+  FileText
+} from 'lucide-react';
+
+const CATEGORIES = ['All', 'Documents', 'AI', 'Versions', 'Export'] as const;
+type Category = typeof CATEGORIES[number];
 
 export function ActivityBell() {
   const [open, setOpen] = useState(false);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [unread, setUnread] = useState(false); // Just a generic dot indicator for MVP
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [category, setCategory] = useState<Category>('All');
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [unread, setUnread] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Fetch activities when dropdown opens
+  const fetchActivities = async (cat: Category, cursor?: string | null, append: boolean = false) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+
+    try {
+      const url = new URL('/api/activity', window.location.origin);
+      url.searchParams.set('limit', '20');
+      url.searchParams.set('filter', cat);
+      if (cursor) url.searchParams.set('startAfter', cursor);
+
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error('Failed to fetch activities');
+      const data = await res.json();
+
+      if (append) {
+        setActivities(prev => [...prev, ...(data.activities || [])]);
+      } else {
+        setActivities(data.activities || []);
+        setUnread(false);
+      }
+      setHasMore(!!data.hasMore);
+      setNextCursor(data.nextCursor || null);
+    } catch (err) {
+      console.error('Error loading activities:', err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
   useEffect(() => {
     if (open) {
-      setLoading(true);
-      getActivities(10)
-        .then(res => {
-          setActivities(res.data.activities || []);
-          setUnread(false);
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+      fetchActivities(category, null, false);
     }
-  }, [open]);
+  }, [open, category]);
 
-  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -38,41 +78,90 @@ export function ActivityBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  // Icon depending on status
-  const getIcon = (status: string) => {
-    if (status === 'success') return <span style={{ color: '#10b981' }}>✔</span>;
-    if (status === 'failed') return <span style={{ color: '#ef4444' }}>✖</span>;
-    return <span style={{ color: '#3b82f6' }}>ℹ</span>;
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'DOCUMENT_CREATED':
+      case 'OCR_COMPLETED':
+        return <Upload size={15} color="#475569" />;
+      case 'DOCUMENT_UPDATED':
+        return <Pencil size={15} color="#475569" />;
+      case 'VERSION_CREATED':
+        return <History size={15} color="#475569" />;
+      case 'VERSION_RESTORED':
+        return <RotateCcw size={15} color="#475569" />;
+      case 'TRANSLATION_COMPLETED':
+        return <Languages size={15} color="#475569" />;
+      case 'AI_SUMMARY_GENERATED':
+        return <Sparkles size={15} color="#475569" />;
+      case 'CHAT_SESSION_STARTED':
+        return <MessageSquare size={15} color="#475569" />;
+      case 'DOCUMENT_EXPORTED':
+        return <Download size={15} color="#475569" />;
+      default:
+        return <FileText size={15} color="#475569" />;
+    }
   };
 
-  const formatActivityText = (act: any) => {
-    const { type, title } = act;
+  const getActivityTitle = (type: string) => {
     switch (type) {
-      case 'DOCUMENT_CREATED': return `Created: ${title}`;
-      case 'OCR_COMPLETED': return `OCR Complete: ${title}`;
-      case 'OCR_FAILED': return `OCR Failed: ${title}`;
-      case 'VERSION_CREATED': return `Version Created: ${title}`;
-      case 'BATCH_COMPLETED': return `Batch Complete: ${title}`;
-      case 'BATCH_FAILED': return `Batch Failed: ${title}`;
-      default: return title || type;
+      case 'DOCUMENT_CREATED':
+      case 'OCR_COMPLETED':
+        return 'Document Uploaded';
+      case 'DOCUMENT_UPDATED':
+        return 'Document Updated';
+      case 'VERSION_CREATED':
+        return 'Version Created';
+      case 'VERSION_RESTORED':
+        return 'Version Restored';
+      case 'TRANSLATION_COMPLETED':
+        return 'Translation Completed';
+      case 'AI_SUMMARY_GENERATED':
+        return 'AI Summary Generated';
+      case 'CHAT_SESSION_STARTED':
+        return 'Chat Session Started';
+      case 'DOCUMENT_EXPORTED':
+        return 'Document Exported';
+      default:
+        return 'Activity Logged';
     }
   };
 
   const getTargetUrl = (act: any) => {
     if (act.entityType === 'document' || act.entityType === 'version') return `/doc/${act.entityId}`;
     if (act.entityType === 'batch') return `/batch/${act.entityId}`;
-    return '#';
+    return act.entityId ? `/doc/${act.entityId}` : '#';
   };
 
-  const timeAgo = (dateStr: string) => {
-    const seconds = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 1000);
-    if (seconds < 60) return `${Math.max(0, seconds)}s ago`;
-    const min = Math.floor(seconds / 60);
-    if (min < 60) return `${min}m ago`;
+  const formatRelativeTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    const now = new Date().getTime();
+    const date = new Date(dateStr).getTime();
+    const diffSec = Math.floor((now - date) / 1000);
+
+    if (diffSec < 60) return 'Just now';
+    const min = Math.floor(diffSec / 60);
+    if (min < 60) return `${min} min ago`;
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
+    if (hr < 24) return `${hr} hour${hr > 1 ? 's' : ''} ago`;
     const d = Math.floor(hr / 24);
-    return `${d}d ago`;
+    if (d === 1) return 'Yesterday';
+    if (d < 7) return `${d} days ago`;
+
+    const dt = new Date(dateStr);
+    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatTooltipTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    const dt = new Date(dateStr);
+    return dt.toLocaleString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   return (
@@ -80,46 +169,102 @@ export function ActivityBell() {
       <button 
         style={s.bellBtn}
         onClick={() => setOpen(!open)}
-        aria-label="Activity"
+        aria-label="Activity Center"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-        </svg>
-        {/* Mock unread dot if wanted */}
+        <Bell size={18} />
         {unread && <div style={s.unreadDot} />}
       </button>
 
       {open && (
         <div style={s.dropdown}>
           <div style={s.dropdownHeader}>
-            <h3 style={s.dropdownTitle}>Recent Activity</h3>
+            <h3 style={s.dropdownTitle}>Activity Center</h3>
+            <div style={s.chipsContainer}>
+              {CATEGORIES.map(cat => (
+                <button
+                  key={cat}
+                  style={{
+                    ...s.chip,
+                    ...(category === cat ? s.chipActive : s.chipInactive)
+                  }}
+                  onClick={() => setCategory(cat)}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
           
           <div style={s.activityList}>
             {loading ? (
-              <div style={s.loadingText}>Loading...</div>
-            ) : activities.length === 0 ? (
-              <div style={s.emptyText}>No recent activity</div>
-            ) : (
-              activities.map((act) => (
-                <Link key={act.id} href={getTargetUrl(act)} style={s.activityItem} onClick={() => setOpen(false)}>
-                  <div style={s.activityIcon}>
-                    {getIcon(act.status)}
-                  </div>
-                  <div style={s.activityContent}>
-                    <div style={s.activityTitle}>{formatActivityText(act)}</div>
-                    <div style={s.activityTime}>
-                      {timeAgo(act.createdAt)}
+              /* Skeleton Loader */
+              <div style={s.skeletonContainer}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} style={s.skeletonItem}>
+                    <div style={s.skeletonIcon} />
+                    <div style={s.skeletonContent}>
+                      <div style={s.skeletonTitle} />
+                      <div style={s.skeletonSub} />
                     </div>
                   </div>
-                </Link>
+                ))}
+              </div>
+            ) : activities.length === 0 ? (
+              /* Empty State */
+              <div style={s.emptyContainer}>
+                <div style={s.emptyTitle}>No recent activity yet</div>
+                <div style={s.emptySub}>
+                  Upload a document or edit an existing one to see your activity history.
+                </div>
+              </div>
+            ) : (
+              activities.map((act) => (
+                <div key={act.id} style={s.activityCard}>
+                  <div style={s.activityHeader}>
+                    <div style={s.iconWrapper}>
+                      {getIcon(act.type)}
+                    </div>
+                    <div style={s.activityMeta}>
+                      <div style={s.activityTitle}>{getActivityTitle(act.type)}</div>
+                      <div style={s.activitySub} title={act.title || 'Untitled Document'}>
+                        {act.title || 'Untitled Document'}
+                      </div>
+                    </div>
+                    <div style={s.timeBadge} title={formatTooltipTime(act.createdAt)}>
+                      {formatRelativeTime(act.createdAt)}
+                    </div>
+                  </div>
+                  
+                  <div style={s.cardFooter}>
+                    <Link 
+                      href={getTargetUrl(act)} 
+                      style={s.openLink}
+                      onClick={() => setOpen(false)}
+                    >
+                      <span>Open Document</span>
+                      <ArrowRight size={13} />
+                    </Link>
+                  </div>
+                </div>
               ))
+            )}
+
+            {/* Pagination Load More */}
+            {hasMore && !loading && (
+              <div style={s.loadMoreContainer}>
+                <button 
+                  style={s.loadMoreBtn} 
+                  disabled={loadingMore}
+                  onClick={() => fetchActivities(category, nextCursor, true)}
+                >
+                  {loadingMore ? 'Loading...' : 'Load More'}
+                </button>
+              </div>
             )}
           </div>
           
           <div style={s.dropdownFooter}>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>Activity Center</span>
+            <span>Enterprise Audit Trail</span>
           </div>
         </div>
       )}
@@ -139,14 +284,14 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    transition: 'all 0.2s'
+    transition: 'color 0.15s, background-color 0.15s',
   },
   unreadDot: {
     position: 'absolute',
     top: 6,
     right: 8,
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     background: '#ef4444',
     borderRadius: '50%',
     border: '2px solid #fff'
@@ -155,73 +300,205 @@ const s: Record<string, React.CSSProperties> = {
     position: 'absolute',
     top: '100%',
     right: 0,
-    marginTop: 8,
-    width: 320,
-    background: '#fff',
+    marginTop: 10,
+    width: 360,
+    background: '#ffffff',
     border: '1px solid #e2e8f0',
     borderRadius: 12,
-    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+    boxShadow: '0 20px 35px -5px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.05)',
     zIndex: 100,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: 520,
   },
   dropdownHeader: {
-    padding: '12px 16px',
+    padding: '14px 16px 12px',
     borderBottom: '1px solid #f1f5f9',
-    background: '#f8fafc'
+    background: '#f8fafc',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
   },
   dropdownTitle: {
     margin: 0,
-    fontSize: 14,
+    fontSize: 14.5,
+    fontWeight: 700,
+    color: '#0f172a',
+    fontFamily: '"TT Hoves", system-ui, sans-serif',
+  },
+  chipsContainer: {
+    display: 'flex',
+    gap: 6,
+    overflowX: 'auto',
+    paddingBottom: 2,
+  },
+  chip: {
+    padding: '4px 10px',
+    borderRadius: 999,
+    fontSize: 11.5,
     fontWeight: 600,
-    color: '#0f172a'
+    cursor: 'pointer',
+    border: 'none',
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap',
+  },
+  chipActive: {
+    backgroundColor: '#0f172a',
+    color: '#ffffff',
+  },
+  chipInactive: {
+    backgroundColor: '#e2e8f0',
+    color: '#475569',
   },
   activityList: {
-    maxHeight: 360,
-    overflowY: 'auto'
-  },
-  loadingText: {
-    padding: 24,
-    textAlign: 'center',
-    fontSize: 13,
-    color: '#94a3b8'
-  },
-  emptyText: {
-    padding: 24,
-    textAlign: 'center',
-    fontSize: 13,
-    color: '#94a3b8'
-  },
-  activityItem: {
+    overflowY: 'auto',
+    flex: 1,
     display: 'flex',
+    flexDirection: 'column',
+  },
+  activityCard: {
     padding: '12px 16px',
     borderBottom: '1px solid #f1f5f9',
-    textDecoration: 'none',
-    color: 'inherit',
-    transition: 'background 0.15s'
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    transition: 'background-color 0.15s',
   },
-  activityIcon: {
-    fontSize: 14,
-    marginRight: 12,
-    marginTop: 2
+  activityHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  activityContent: {
-    flex: 1
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  activityMeta: {
+    flex: 1,
+    minWidth: 0,
   },
   activityTitle: {
     fontSize: 13,
-    fontWeight: 500,
-    color: '#1e293b',
-    marginBottom: 4,
-    lineHeight: 1.4
+    fontWeight: 600,
+    color: '#0f172a',
+    lineHeight: 1.3,
   },
-  activityTime: {
+  activitySub: {
+    fontSize: 12,
+    color: '#64748b',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    marginTop: 2,
+  },
+  timeBadge: {
     fontSize: 11,
-    color: '#94a3b8'
+    color: '#94a3b8',
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  cardFooter: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+  },
+  openLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: '#2563eb',
+    textDecoration: 'none',
+  },
+  emptyContainer: {
+    padding: '36px 20px',
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: '#334155',
+  },
+  emptySub: {
+    fontSize: 12,
+    color: '#94a3b8',
+    lineHeight: 1.5,
+    maxWidth: 240,
+  },
+  skeletonContainer: {
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+  },
+  skeletonItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  skeletonIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    flexShrink: 0,
+  },
+  skeletonContent: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  skeletonTitle: {
+    height: 12,
+    width: '60%',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 4,
+  },
+  skeletonSub: {
+    height: 10,
+    width: '40%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 4,
+  },
+  loadMoreContainer: {
+    padding: '12px 16px',
+    textAlign: 'center',
+    borderTop: '1px solid #f1f5f9',
+  },
+  loadMoreBtn: {
+    background: '#f1f5f9',
+    border: 'none',
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: 600,
+    padding: '6px 16px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
   },
   dropdownFooter: {
-    padding: '8px 16px',
+    padding: '10px 16px',
     background: '#f8fafc',
     textAlign: 'center',
-    borderTop: '1px solid #f1f5f9'
+    borderTop: '1px solid #f1f5f9',
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   }
 };
