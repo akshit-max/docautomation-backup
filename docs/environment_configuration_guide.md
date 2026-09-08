@@ -40,7 +40,7 @@ To successfully run the project locally, you only need the following variables i
 
 ### Optional / Recommended Variables
 - `PYTHON_OCR_URL`: Recommended if your Python microservice is hosted on a separate domain (e.g., Render, Railway) rather than localhost.
-- `LLM_MODEL`: Optional. Defaults to `openai/gpt-oss-20b:free`.
+- `LLM_MODEL`: Optional. Defaults to `openai/gpt-4o-mini`.
 - `NEXT_PUBLIC_API_URL`: Optional. Defaults to `/api`.
 
 ### Variables that must differ between Dev and Prod

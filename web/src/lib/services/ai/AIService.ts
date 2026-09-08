@@ -34,7 +34,7 @@ Text to classify:
 `;
 
     const payload = {
-      model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
+      model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
       temperature: 0.1,
       max_tokens: 500,
       messages: [{ role: 'user', content: prompt }]
@@ -83,7 +83,7 @@ Text to classify:
     }
 
     const payload = {
-      model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
+      model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
       temperature: 0.1,
       max_tokens: 3000,
       response_format: { type: 'json_object' },
@@ -160,7 +160,7 @@ ${rawInput}
    */
   static async streamChat(messages: any[]): Promise<ReadableStream | null> {
     const payload = {
-      model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
+      model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
       temperature: 0.1,
       stream: true,
       messages
@@ -208,7 +208,7 @@ ${rawInput}
     rawInput?: string;
   }): Promise<string> {
     const payload = {
-      model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
+      model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
       temperature: 0.1,
       max_tokens: 150,
       messages: [
