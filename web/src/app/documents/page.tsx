@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Star, Tag, StickyNote, FileText, Pencil, Trash2, Search, ArrowRight } from 'lucide-react';
+import { Star, Tag, StickyNote, FileText, Pencil, Trash2, Search, ArrowRight, LogOut, Settings, Eye, EyeOff, BarChart2, Plus, X } from 'lucide-react';
+import logoImg from "../../../public/logo.png";
 
 import { ActivityBell } from "@/components/ActivityBell";
 import { ALLOWED_STATUSES, getStatusColor, DocumentStatus } from '@/lib/constants/document-status';
@@ -25,6 +26,18 @@ export default function Documents() {
   const [renamingDoc, setRenamingDoc] = useState<any | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const router = useRouter();
+
+  // ── Settings / Change Password state ─────────────────────────────────────
+  const [showSettings, setShowSettings] = useState(false);
+  const [cpCurrentPw, setCpCurrentPw] = useState("");
+  const [cpNewPw, setCpNewPw] = useState("");
+  const [cpConfirmPw, setCpConfirmPw] = useState("");
+  const [cpLoading, setCpLoading] = useState(false);
+  const [cpError, setCpError] = useState("");
+  const [cpSuccess, setCpSuccess] = useState("");
+  const [cpShowCurrent, setCpShowCurrent] = useState(false);
+  const [cpShowNew, setCpShowNew] = useState(false);
+  const [cpShowConfirm, setCpShowConfirm] = useState(false);
 
   // Pagination & Filtering state
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -211,20 +224,90 @@ export default function Documents() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (e) {
+      console.error('Logout failed', e);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCpError("");
+    setCpSuccess("");
+    if (!cpCurrentPw || !cpNewPw || !cpConfirmPw) {
+      setCpError("All fields are required.");
+      return;
+    }
+    if (cpNewPw !== cpConfirmPw) {
+      setCpError("New password and confirmation do not match.");
+      return;
+    }
+    setCpLoading(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: cpCurrentPw,
+          newPassword: cpNewPw,
+          confirmPassword: cpConfirmPw,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCpSuccess("Password changed successfully. Use the new password next time you sign in.");
+        setCpCurrentPw("");
+        setCpNewPw("");
+        setCpConfirmPw("");
+      } else {
+        setCpError(data.error || "Password change failed.");
+      }
+    } catch {
+      setCpError("A network error occurred. Please try again.");
+    } finally {
+      setCpLoading(false);
+    }
+  };
+
   return (
     <div style={s.page}>
       {/* ── Header ── */}
       <div className="docs-header" style={s.header}>
         <div style={s.headerLeft}>
-          <Link href="/" style={s.logoLink}>
-            <AsteriskIcon size={22} />
-            <span style={s.logoText}>makewithus</span>
+          <Link href="/documents" style={s.logoLink}>
+            <img src={typeof logoImg === "string" ? logoImg : logoImg.src} alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
+            <span style={s.logoText} className="hdr-logo-text">makewithus</span>
           </Link>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={s.headerRight}>
           <ActivityBell />
-          <Link href="/analytics" style={{ ...s.newBtn, background: '#fff', color: '#111', border: '1px solid #ddd' }}>Analytics</Link>
-          <Link href="/" style={s.newBtn}>+ New document</Link>
+          <Link href="/analytics" className="hdr-btn-nav" title="Analytics Overview">
+            <BarChart2 size={15} />
+            <span>Analytics</span>
+          </Link>
+          <button
+            onClick={() => { setShowSettings(true); setCpError(""); setCpSuccess(""); }}
+            className="hdr-btn-nav"
+            title="Settings"
+          >
+            <Settings size={15} />
+            <span>Settings</span>
+          </button>
+          <button 
+            onClick={handleLogout} 
+            className="hdr-btn-logout"
+            title="Sign out"
+          >
+            <LogOut size={15} />
+            <span>Logout</span>
+          </button>
+          <Link href="/" className="hdr-btn-primary" title="Create a new document">
+            <Plus size={15} />
+            <span>New document</span>
+          </Link>
         </div>
       </div>
 
@@ -515,15 +598,120 @@ export default function Documents() {
           </div>
         </div>
       )}
+
+      {/* ── Settings Modal (Change Password) ── */}
+      {showSettings && (
+        <div style={s.modalOverlay} onClick={() => setShowSettings(false)}>
+          <div style={s.settingsModalContent} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a', letterSpacing: -0.4, fontFamily: '"TT Hoves", system-ui, sans-serif' }}>Settings</h2>
+                <p style={{ margin: '3px 0 0', fontSize: 12.5, color: '#64748b' }}>Account & Security Preferences</p>
+              </div>
+              <button 
+                onClick={() => setShowSettings(false)} 
+                style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+                title="Close"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div style={{ borderBottom: '1px solid #e2e8f0', marginBottom: 20 }} />
+
+            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8 }}>Change Password</div>
+
+              {/* Current Password */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>Current Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={cpShowCurrent ? 'text' : 'password'}
+                    value={cpCurrentPw}
+                    onChange={e => setCpCurrentPw(e.target.value)}
+                    style={s.settingsInput as React.CSSProperties}
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
+                  />
+                  <button type="button" onClick={() => setCpShowCurrent(v => !v)} style={s.eyeToggleBtn}>
+                    {cpShowCurrent ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* New Password */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>New Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={cpShowNew ? 'text' : 'password'}
+                    value={cpNewPw}
+                    onChange={e => setCpNewPw(e.target.value)}
+                    style={s.settingsInput as React.CSSProperties}
+                    placeholder="Min. 8 characters"
+                    autoComplete="new-password"
+                  />
+                  <button type="button" onClick={() => setCpShowNew(v => !v)} style={s.eyeToggleBtn}>
+                    {cpShowNew ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 600, color: '#334155' }}>Confirm New Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={cpShowConfirm ? 'text' : 'password'}
+                    value={cpConfirmPw}
+                    onChange={e => setCpConfirmPw(e.target.value)}
+                    style={s.settingsInput as React.CSSProperties}
+                    placeholder="Repeat new password"
+                    autoComplete="new-password"
+                  />
+                  <button type="button" onClick={() => setCpShowConfirm(v => !v)} style={s.eyeToggleBtn}>
+                    {cpShowConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error / Success messages */}
+              {cpError && (
+                <div style={{ fontSize: 13, color: '#dc2626', background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 6, padding: '10px 14px' }}>
+                  {cpError}
+                </div>
+              )}
+              {cpSuccess && (
+                <div style={{ fontSize: 13, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: '10px 14px' }}>
+                  {cpSuccess}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                <button type="button" onClick={() => setShowSettings(false)} className="hdr-btn-nav" style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+                <button
+                  type="submit"
+                  disabled={cpLoading}
+                  className="hdr-btn-primary"
+                  style={{ flex: 1.5, justifyContent: 'center', opacity: cpLoading ? 0.7 : 1, cursor: cpLoading ? 'not-allowed' : 'pointer' }}
+                >
+                  {cpLoading ? 'Changing…' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 
-function AsteriskIcon({ size = 18 }: { size?: number }) {
+function AsteriskIcon({ size = 22 }: { size?: number }) {
   return (
     <img
-      src="/logo.png"
+      src={typeof logoImg === "string" ? logoImg : logoImg.src}
       alt="makewithus"
       style={{
         width: size,
@@ -544,74 +732,128 @@ function PencilIcon({ size = 14, color = "#666" }: { size?: number; color?: stri
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { minHeight: "100vh", background: "#fafafa", fontFamily: "system-ui,-apple-system,sans-serif" },
+  page: { minHeight: "100vh", background: "#f8fafc", fontFamily: "system-ui,-apple-system,sans-serif" },
 
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 24px", height: 56, background: "#fff", borderBottom: "1px solid #e8e8e8", position: "sticky", top: 0, zIndex: 10 },
-  headerLeft: { display: "flex", alignItems: "center" },
-  logoLink: { display: "flex", alignItems: "center", gap: 8, textDecoration: "none" },
-  logoText: { fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.3, fontFamily: '"TT Hoves", system-ui, sans-serif' },
-  newBtn: { fontSize: 13, fontWeight: 600, background: "#111", color: "#fff", padding: "8px 18px", borderRadius: 4, textDecoration: "none", cursor: "pointer", border: "none" },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "0 24px",
+    height: 60,
+    background: "#ffffff",
+    borderBottom: "1px solid #e2e8f0",
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
+  },
+  headerLeft: { display: "flex", alignItems: "center", gap: 12 },
+  headerRight: { display: "flex", alignItems: "center", gap: 10 },
+  logoLink: { display: "flex", alignItems: "center", gap: 10, textDecoration: "none" },
+  logoText: { fontSize: 16, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.4px", fontFamily: '"TT Hoves", system-ui, -apple-system, sans-serif' },
 
-  wrap: { maxWidth: 1100, margin: "0 auto", padding: "36px 24px 80px" },
+  wrap: { maxWidth: 1360, margin: "0 auto", padding: "36px 24px 80px" },
 
-  pageHeader: { textAlign: "center", padding: "16px 0 48px" },
-  pageTitle: { fontSize: 28, fontWeight: 700, margin: "0 0 12px", fontFamily: '"TT Hoves", system-ui, sans-serif', letterSpacing: -0.5, color: "#111" },
-  pageSubtitle: { color: "#666", fontSize: 15, margin: 0 },
+  pageHeader: { textAlign: "center", padding: "16px 0 44px" },
+  pageTitle: { fontSize: 30, fontWeight: 800, margin: "0 0 10px", fontFamily: '"TT Hoves", system-ui, sans-serif', letterSpacing: "-0.6px", color: "#0f172a" },
+  pageSubtitle: { color: "#64748b", fontSize: 15, margin: 0, fontWeight: 400 },
 
   /* ── TOOLBAR ── */
   toolbar: { display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 },
   searchWrap: { position: "relative", flex: 1, display: "flex", alignItems: "center" },
-  searchInput: { width: "100%", border: "1px solid #e8e8e8", borderRadius: 4, padding: "9px 14px 9px 36px", fontSize: 13, color: "#111", outline: "none", fontFamily: "inherit", background: "#fff", height: 36, boxSizing: "border-box" },
+  searchInput: { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "9px 14px 9px 38px", fontSize: 13.5, color: "#0f172a", outline: "none", fontFamily: "inherit", background: "#fff", height: 38, boxSizing: "border-box" },
   
-  favFilterBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", height: 36, border: "1px solid #e8e8e8", background: "#fff", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 500, color: "#666", whiteSpace: "nowrap", boxSizing: "border-box" },
-  favFilterBtnActive: { background: "#111", color: "#fff", border: "1px solid #111" },
+  favFilterBtn: { display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", height: 38, border: "1px solid #cbd5e1", background: "#fff", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#475569", whiteSpace: "nowrap", boxSizing: "border-box", transition: "all 0.15s ease" },
+  favFilterBtnActive: { background: "#0f172a", color: "#fff", border: "1px solid #0f172a" },
   
-  segmentedControl: { display: "flex", background: "#f5f5f5", padding: 4, borderRadius: 6, gap: 2 },
-  segmentedBtn: { padding: "6px 14px", border: "none", background: "transparent", color: "#555", fontSize: 12, fontWeight: 500, cursor: "pointer", borderRadius: 4, fontFamily: "inherit" },
-  segmentedBtnActive: { background: "#fff", color: "#111", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", fontWeight: 600 },
+  segmentedControl: { display: "flex", background: "#f1f5f9", padding: 4, borderRadius: 8, gap: 2 },
+  segmentedBtn: { padding: "6px 14px", border: "none", background: "transparent", color: "#64748b", fontSize: 12, fontWeight: 500, cursor: "pointer", borderRadius: 6, fontFamily: "inherit", transition: "all 0.15s ease" },
+  segmentedBtnActive: { background: "#fff", color: "#0f172a", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", fontWeight: 600 },
   
-  filterSelect: { height: 36, padding: "0 12px", border: "1px solid #e8e8e8", borderRadius: 4, background: "#fff", fontSize: 13, color: "#111", outline: "none", cursor: "pointer", fontFamily: "inherit", minWidth: 140, boxSizing: "border-box" },
-  filterInput: { height: 36, padding: "0 12px", border: "1px solid #e8e8e8", borderRadius: 4, background: "#fff", fontSize: 13, color: "#111", outline: "none", width: 160, fontFamily: "inherit", boxSizing: "border-box" },
+  filterSelect: { height: 38, padding: "0 12px", border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff", fontSize: 13, color: "#0f172a", outline: "none", cursor: "pointer", fontFamily: "inherit", minWidth: 140, boxSizing: "border-box" },
+  filterInput: { height: 38, padding: "0 12px", border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff", fontSize: 13, color: "#0f172a", outline: "none", width: 160, fontFamily: "inherit", boxSizing: "border-box" },
 
   centerBox: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 0", textAlign: "center" },
-  spinner: { width: 28, height: 28, border: "2.5px solid #eee", borderTopColor: "#111", borderRadius: "50%", animation: "spin .8s linear infinite" },
+  spinner: { width: 28, height: 28, border: "2.5px solid #e2e8f0", borderTopColor: "#0f172a", borderRadius: "50%", animation: "spin .8s linear infinite" },
 
   /* ── GRID & CARDS ── */
   grid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-    gap: 16,
+    gap: 18,
   },
   card: {
-    background: "#fff",
-    border: "1px solid #e8e8e8",
-    borderRadius: 4,
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 10,
     padding: "20px",
     cursor: "pointer",
     display: "flex",
-    flexDirection: "column"
+    flexDirection: "column",
+    transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
   },
   cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-  cardCheckbox: { cursor: "pointer", width: 14, height: 14, accentColor: "#111", marginTop: 2 },
-  cardTitle: { fontSize: 16, fontWeight: 700, color: "#111", lineHeight: 1.3, marginBottom: 0, fontFamily: '"TT Hoves", system-ui, sans-serif' },
+  cardCheckbox: { cursor: "pointer", width: 15, height: 15, accentColor: "#0f172a", marginTop: 2 },
+  cardTitle: { fontSize: 16, fontWeight: 700, color: "#0f172a", lineHeight: 1.3, marginBottom: 0, fontFamily: '"TT Hoves", system-ui, sans-serif' },
   cardMetaRow: { display: "flex", alignItems: "center", gap: 8 },
-  cardDate: { fontSize: 12, color: "#888", fontWeight: 400 },
-  cardDot: { fontSize: 12, color: "#ccc" },
-  cardId: { fontSize: 11, color: "#aaa", fontFamily: "monospace" },
+  cardDate: { fontSize: 12, color: "#64748b", fontWeight: 400 },
+  cardDot: { fontSize: 12, color: "#cbd5e1" },
+  cardId: { fontSize: 11, color: "#94a3b8", fontFamily: "monospace" },
   favBtnAction: { background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" },
   
   badgesRow: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 },
   badge: { fontSize: 11, padding: "3px 8px", borderRadius: 4, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 },
-  tagBadge: { fontSize: 11, padding: "3px 8px", background: "#f5f5f5", color: "#555", borderRadius: 4, display: "flex", alignItems: "center", gap: 4 },
+  tagBadge: { fontSize: 11, padding: "3px 8px", background: "#f1f5f9", color: "#475569", borderRadius: 4, display: "flex", alignItems: "center", gap: 4 },
   noteBadge: { fontSize: 11, padding: "3px 8px", background: "#fef3c7", color: "#b45309", borderRadius: 4, display: "flex", alignItems: "center", gap: 4 },
 
-  cardFooter: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 20, borderTop: "1px solid #f0f0f0", marginTop: "auto" },
-  btnPrimarySm: { fontSize: 13, color: "#111", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 6 },
-  btnIcon: { display: "flex", alignItems: "center", justifyContent: "center", background: "none", color: "#666", border: "none", cursor: "pointer", fontSize: 13, gap: 6 },
+  cardFooter: { display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 16, borderTop: "1px solid #f1f5f9", marginTop: "auto" },
+  btnPrimarySm: { fontSize: 13, color: "#0f172a", fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 6 },
+  btnIcon: { display: "flex", alignItems: "center", justifyContent: "center", background: "none", color: "#64748b", border: "none", cursor: "pointer", fontSize: 13, gap: 6 },
 
-  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(2px)" },
-  modalContent: { background: "#fff", borderRadius: 4, padding: 24, width: 340, boxShadow: "0 10px 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" },
-  renameInput: { width: "100%", border: "1.5px solid #e8e8e8", borderRadius: 4, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit", marginBottom: 12 },
-  btnOutline: { background: "#f5f5f5", color: "#555", border: "none", padding: "8px 16px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 },
-  btnPrimary: { background: "#111", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 },
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,23,42,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" },
+  modalContent: { background: "#fff", borderRadius: 12, padding: 24, width: 360, boxShadow: "0 20px 40px -10px rgba(15,23,42,0.18)", display: "flex", flexDirection: "column" },
+  settingsModalContent: {
+    background: "#ffffff",
+    borderRadius: 12,
+    padding: 28,
+    width: 390,
+    maxWidth: "calc(100vw - 32px)",
+    maxHeight: "calc(100vh - 40px)",
+    overflowY: "auto",
+    boxShadow: "0 20px 40px -10px rgba(15,23,42,0.2), 0 0 0 1px rgba(0,0,0,0.05)",
+    display: "flex",
+    flexDirection: "column",
+    animation: "scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+  },
+  settingsInput: {
+    width: "100%",
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    padding: "9px 38px 9px 12px",
+    fontSize: 13.5,
+    outline: "none",
+    fontFamily: "inherit",
+    background: "#fff",
+    color: "#0f172a",
+    boxSizing: "border-box",
+    transition: "border-color 0.15s, box-shadow 0.15s",
+  },
+  eyeToggleBtn: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    color: "#94a3b8",
+    display: "flex",
+    alignItems: "center",
+    padding: 4,
+    borderRadius: 4,
+    transition: "color 0.15s",
+  },
+  renameInput: { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "10px 12px", fontSize: 14, outline: "none", fontFamily: "inherit", marginBottom: 12 },
+  btnOutline: { background: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 },
+  btnPrimary: { background: "#0f172a", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 },
 };

@@ -121,10 +121,12 @@ const s: Record<string, React.CSSProperties> = {
     transition: "border-color .15s, background .15s",
   },
   inputDisabled: {
-    background: "#f5f5f5",
-    color: "#aaa",
+    background: "#f1f5f9",
+    color: "#334155",
+    fontWeight: 600,
     cursor: "not-allowed",
-    borderColor: "#f0f0f0",
+    borderColor: "#cbd5e1",
+    opacity: 0.9,
   },
   inputError: {
   },

@@ -1,0 +1,72 @@
+﻿diff --git a/backend/templates/invoice/layout.html b/backend/templates/invoice/layout.html
+index 52fffc3..0bc5b4e 100644
+--- a/backend/templates/invoice/layout.html
++++ b/backend/templates/invoice/layout.html
+@@ -535,6 +535,7 @@ div {
+       <p>Trivandrum</p>
+       <p>Kerala</p>
+       <p>India</p>
++      <p style="margin-top:3mm; font-weight:700; letter-spacing:0.05em;">GSTIN: 32AAVCM0878J1ZX</p>
+     </div>
+   </div>
+ 
+@@ -640,16 +641,36 @@ div {
+         </td>
+       </tr>
+ 
++      <!-- DISCOUNT & TAXABLE (Optional) -->
++      {% if formatted_discount %}
++      <tr>
++        <td colspan="2"></td>
++        <td class="lc">Discount</td>
++        <td class="ac">
++          <span class="amount-bold">{{ formatted_discount }}</span>
++        </td>
++      </tr>
++      {% endif %}
++
++      {% if taxable_amount %}
++      <tr>
++        <td colspan="2"></td>
++        <td class="lc">Taxable</td>
++        <td class="ac">
++          <span class="amount-bold">{{ taxable_amount }}</span>
++        </td>
++      </tr>
++      {% endif %}
++
+       <!-- GST -->
+-       <!-- GST -->
+-     {% if gst_percent and gst_percent > 0 %}
+-<tr>
+-  <td colspan="2"></td>
+-  <td class="lc">GST</td>
+-  <td class="ac">
+-    <span class="amount-bold">Γé╣{{ "%.0f"|format(gst_amount) }}</span>
+-  </td>
+-</tr>
++     {% if gst_amount and gst_amount != '0' %}
++      <tr>
++        <td colspan="2"></td>
++        <td class="lc">GST</td>
++        <td class="ac">
++          <span class="amount-bold">{{ gst_amount }}</span>
++        </td>
++      </tr>
+       {% endif %}
+       <!-- <tr>
+         <td colspan="2"></td>
+@@ -686,11 +707,11 @@ div {
+           {{ project_name or client_name }}
+         </span>
+       </div>
+-      {% if gst_percent and gst_percent > 0 %}
++      {% if gst_amount and gst_amount != '0' %}
+       <div class="srow">
+         <span class="sk">TAX/GST</span>
+         <span class="sv" contenteditable="true">
+-          {{ gst_percent }}%
++          {{ gst_display_val }}
+         </span>
+       </div>
+       {% endif %}

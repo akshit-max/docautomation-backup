@@ -27,6 +27,8 @@ function getBlankContent(type: string) {
         line_items: [],
         subtotal: "0",
         gst_percent: 0,
+        gst_type: "percent",
+        gst_input: "",
         gst_amount: "0",
         total: "0",
         payment_status: "",
@@ -73,7 +75,11 @@ function getBlankContent(type: string) {
         client_address: "",
         project_description: "",
         line_items: [],
+        discount: "",
+        discount_type: "amount",
         gst_percent: 0,
+        gst_type: "percent",
+        gst_input: "",
         gst_amount: "0",
         subtotal: "0",
         total: "0",
@@ -86,6 +92,7 @@ function getBlankContent(type: string) {
         upi_id: "",
         notes: "",
       };
+
     case "timeline":
       return {
         project_name: "",

@@ -26,8 +26,10 @@ import {
   Zap,
   Award,
   Activity,
-  BarChart2
+  BarChart2,
+  LogOut
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { ActivityBell } from "@/components/ActivityBell";
 
 const TYPE_META: Record<string, { label: string; bg: string; color: string; stroke: string }> = {
@@ -715,17 +717,36 @@ export default function Analytics() {
 }
 
 function Header() {
+  const router = useRouter();
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    router.push('/login');
+  };
+
   return (
     <div className="analytics-header" style={s.header}>
       <div style={s.headerLeft}>
         <Link href="/documents" style={s.logoLink}>
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
-          <span style={s.logoText}>makewithus</span>
+          <span style={s.logoText} className="hdr-logo-text">makewithus</span>
         </Link>
       </div>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+      <div style={s.headerRight}>
         <ActivityBell />
-        <Link href="/documents" style={s.navBtn}>Workspace</Link>
+        <Link href="/documents" className="hdr-btn-nav" title="Workspace Documents">
+          <FileText size={15} />
+          <span>Documents</span>
+        </Link>
+        <button 
+          onClick={handleLogout} 
+          className="hdr-btn-logout"
+          title="Sign out"
+        >
+          <LogOut size={15} />
+          <span>Logout</span>
+        </button>
       </div>
     </div>
   );
@@ -754,6 +775,12 @@ const s: Record<string, React.CSSProperties> = {
   headerLeft: {
     display: "flex",
     alignItems: "center",
+    gap: 12,
+  },
+  headerRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
   },
   logoLink: {
     display: "flex",

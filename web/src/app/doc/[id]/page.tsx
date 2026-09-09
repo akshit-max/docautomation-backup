@@ -477,13 +477,15 @@ export default function DocumentEditor() {
           <button style={s.btnOutline} onClick={handleSaveSnapshot} disabled={savingSnapshot}>
             <Save size={14} style={{ marginRight: 6 }} /> {savingSnapshot ? "Saving..." : "Save Snapshot"}
           </button>
-          <button
+          {/* Chat button hidden per client request — Chat backend/APIs remain fully intact */}
+          {/* <button
             style={chatOpen ? { ...s.btnOutline, background: "#f1f5f9" } : s.btnOutline}
             onClick={() => setChatOpen(!chatOpen)}
           >
             <MessageSquareText size={14} style={{ marginRight: 6, verticalAlign: "text-bottom" }} />
             Chat
-          </button>
+          </button> */}
+
         </div>
       </div>
 
@@ -644,6 +646,10 @@ export default function DocumentEditor() {
             url={previewRouteUrl(id, previewVersion?.id)}
             onDownload={handleDownloadPDF}
             previewKey={previewVersion ? previewVersion.id : previewKey}
+            // Live preview (no reload) for all templates
+            liveContent={!previewVersion ? content : undefined}
+            templateType={doc?.template_type}
+            docId={id}
           />
         </div>
 

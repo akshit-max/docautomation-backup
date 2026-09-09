@@ -2,23 +2,42 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export default function proxy(request: NextRequest) {
-  if (!request.nextUrl.pathname.startsWith('/api')) {
+  const { pathname } = request.nextUrl;
+
+  // ── 1. Session Authentication (UI & APIs) ─────────────────────────
+  const isPublicRoute = 
+    pathname === '/login' || 
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/static');
+
+  const session = request.cookies.get('mwu_session')?.value;
+
+  if (!isPublicRoute && !session) {
+    if (!pathname.startsWith('/api/')) {
+      // Unauthenticated UI request -> redirect to login
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    // For API requests without a session, we let them fall through 
+    // to the x-api-secret check below for server-to-server auth.
+  }
+
+  // ── 2. Existing API Protection ────────────────────────────────────
+  if (!pathname.startsWith('/api')) {
     return NextResponse.next();
   }
 
   // Allow preview and export endpoints to be accessed directly (e.g. opened in a new tab or downloaded)
+  // And allow auth routes
   if (
-    request.nextUrl.pathname.includes('/preview') ||
-    request.nextUrl.pathname.includes('/export')
+    pathname.includes('/preview') ||
+    pathname.includes('/export') ||
+    pathname.startsWith('/api/auth/')
   ) {
     return NextResponse.next();
   }
 
-  // ── Same-origin browser requests ────────────────────────────────────────
-  // Requests from the browser to the same Next.js server carry an Origin
-  // or Referer header matching the server host. These are always allowed
-  // without the shared secret — the browser has no way to know it and
-  // the secret should never be sent to the client.
+  // Same-origin browser requests (authenticated by session logic above if it reached here, or allowed by origin)
   const origin  = request.headers.get('origin')  || '';
   const referer = request.headers.get('referer') || '';
   const host    = request.headers.get('host')    || '';
@@ -31,12 +50,10 @@ export default function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // ── Cross-origin / server-to-server requests ────────────────────────────
-  // These must supply x-api-secret (e.g. cron jobs, integrations).
+  // Cross-origin / server-to-server requests
   const expectedSecret = process.env.INTERNAL_API_SECRET;
 
   if (!expectedSecret) {
-    // Secret not configured: block external requests to prevent accidental open access
     return new NextResponse(
       JSON.stringify({ error: 'Server configuration error: missing API secret' }),
       { status: 500, headers: { 'content-type': 'application/json' } }
@@ -55,5 +72,5 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

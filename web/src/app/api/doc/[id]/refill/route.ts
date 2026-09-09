@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     const openrouterPayload = {
-      model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
+      model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
       temperature: 0.1,
       max_tokens: 3000,
       response_format: { type: 'json_object' },

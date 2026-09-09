@@ -34,7 +34,7 @@ Text to classify:
 `;
 
     const payload = {
-        model: process.env.LLM_MODEL || 'openai/gpt-oss-20b:free',
+        model: process.env.LLM_MODEL || 'openai/gpt-4o-mini',
         temperature: 0.1,
         max_tokens: 500,
         messages: [{ role: 'user', content: prompt }]
