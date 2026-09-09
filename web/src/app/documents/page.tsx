@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Star, Tag, StickyNote, FileText, Pencil, Trash2, Search, ArrowRight, LogOut, Settings, Eye, EyeOff, BarChart2, Plus, X } from 'lucide-react';
+import { Star, Tag, StickyNote, FileText, Pencil, Trash2, Search, ArrowRight, LogOut, Settings, Eye, EyeOff, BarChart2, Plus, X, Home } from 'lucide-react';
 import logoImg from "../../../public/logo.png";
 
 import { ActivityBell } from "@/components/ActivityBell";
@@ -277,13 +277,17 @@ export default function Documents() {
       {/* ── Header ── */}
       <div className="docs-header" style={s.header}>
         <div style={s.headerLeft}>
-          <Link href="/documents" style={s.logoLink}>
+          <Link href="/" style={s.logoLink}>
             <img src={typeof logoImg === "string" ? logoImg : logoImg.src} alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
             <span style={s.logoText} className="hdr-logo-text">makewithus</span>
           </Link>
         </div>
         <div style={s.headerRight}>
           <ActivityBell />
+          <Link href="/" className="hdr-btn-nav" title="Home Dashboard">
+            <Home size={15} />
+            <span>Home</span>
+          </Link>
           <Link href="/analytics" className="hdr-btn-nav" title="Analytics Overview">
             <BarChart2 size={15} />
             <span>Analytics</span>

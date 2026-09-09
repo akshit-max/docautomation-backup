@@ -27,7 +27,8 @@ import {
   Award,
   Activity,
   BarChart2,
-  LogOut
+  LogOut,
+  Home
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ActivityBell } from "@/components/ActivityBell";
@@ -728,13 +729,17 @@ function Header() {
   return (
     <div className="analytics-header" style={s.header}>
       <div style={s.headerLeft}>
-        <Link href="/documents" style={s.logoLink}>
+        <Link href="/" style={s.logoLink}>
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
           <span style={s.logoText} className="hdr-logo-text">makewithus</span>
         </Link>
       </div>
       <div style={s.headerRight}>
         <ActivityBell />
+        <Link href="/" className="hdr-btn-nav" title="Home Dashboard">
+          <Home size={15} />
+          <span>Home</span>
+        </Link>
         <Link href="/documents" className="hdr-btn-nav" title="Workspace Documents">
           <FileText size={15} />
           <span>Documents</span>
