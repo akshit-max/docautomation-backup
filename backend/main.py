@@ -22,4 +22,10 @@ app.add_middleware(
 
 os.makedirs("./uploads", exist_ok=True)
 
+# ── Health Check ──────────────────────────────────────────────────────────
+@app.get("/")
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "makewithus-ocr", "version": "3.0.0"}
+
 app.include_router(extract.router, prefix="", tags=["Extract"])
