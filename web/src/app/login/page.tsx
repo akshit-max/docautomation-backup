@@ -45,19 +45,20 @@ export default function LoginPage() {
 
   // On mount: if a valid session already exists, skip the login page entirely.
   useEffect(() => {
-    fetch("/api/auth/me", { method: "GET" })
-      .then(res => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { method: "GET" });
         if (res.ok) {
           // Already authenticated — redirect away from login
-          router.replace("/documents");
-        } else {
-          setCheckingAuth(false);
+          router.replace("/");
         }
-      })
-      .catch(() => {
-        // Network error or server down — show the login form
+      } catch (err) {
+        console.error("Auth check failed:", err);
+      } finally {
         setCheckingAuth(false);
-      });
+      }
+    };
+    checkAuth();
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -80,7 +81,7 @@ export default function LoginPage() {
 
       if (res.ok) {
         // Successful login, cookie is set automatically
-        router.push("/documents");
+        router.push("/");
       } else {
         const data = await res.json();
         setError(data.error || "Invalid email or password. Please try again.");
