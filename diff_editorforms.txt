@@ -1,0 +1,413 @@
+﻿diff --git a/web/src/components/editor/EditorForms.tsx b/web/src/components/editor/EditorForms.tsx
+index d01bcd1..8feccf9 100644
+--- a/web/src/components/editor/EditorForms.tsx
++++ b/web/src/components/editor/EditorForms.tsx
+@@ -64,16 +64,29 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
+       baseAmount = parseAmt(content.subtotal);
+     }
+ 
+-    const gstPercentNum = gstEnabled ? parseAmt(content.gst_percent) : 0;
+-    const gstAmt = (baseAmount * gstPercentNum) / 100;
+-    const total = baseAmount + gstAmt;
++    const gstType = content.gst_type || "percent";
++    const gstInput = parseAmt(content.gst_input !== undefined ? content.gst_input : content.gst_percent);
++    let gstAmt = 0;
++    let finalGstPercent = 0;
++
++    if (gstEnabled) {
++      if (gstType === "percent") {
++        finalGstPercent = gstInput;
++        gstAmt = (baseAmount * gstInput) / 100;
++      } else {
++        gstAmt = gstInput;
++      }
++    }
+ 
++    const total = baseAmount + gstAmt;
+     const fmt = (n: number) => n > 0 ? `Γé╣${n.toLocaleString("en-IN")}` : "0";
+ 
+     update("subtotal", fmt(baseAmount));
+-    update("gst_amount", gstEnabled && gstPercentNum > 0 ? fmt(gstAmt) : "0");
++    update("gst_percent", finalGstPercent);
++    update("gst_display_val", gstType === "percent" ? `${finalGstPercent}%` : fmt(gstAmt));
++    update("gst_amount", gstEnabled && gstAmt > 0 ? fmt(gstAmt) : "0");
+     update("total", fmt(total));
+-  }, [content.line_items, content.amount_received, content.gst_percent, gstEnabled]);
++  }, [content.line_items, content.amount_received, content.gst_input, content.gst_percent, content.gst_type, gstEnabled]);
+ 
+   const updateItem = (i: number, key: string, val: any) => {
+     const updated = [...(content.line_items || [])];
+@@ -125,7 +138,7 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
+           </div>
+           <Field label="Description" value={item.description} onChange={v => updateItem(i, "description", v)} />
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 6 }}>
+-            {["hours", "unit_price", "amount"].map(key => (
++            {(["hours", "unit_price"] as const).map(key => (
+               <div key={key} style={f.group}>
+                 <div style={f.label}>{key.replace("_", " ")}</div>
+                 <input
+@@ -135,6 +148,16 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
+                 />
+               </div>
+             ))}
++            {/* Amount is auto-calculated from hours ├ù unit_price */}
++            <div style={f.group}>
++              <div style={f.label}>amount</div>
++              <input
++                style={{ ...f.input, background: "#f1f5f9", color: "#334155", fontWeight: 600, cursor: "not-allowed" } as React.CSSProperties}
++                value={item.amount || ""}
++                readOnly
++                tabIndex={-1}
++              />
++            </div>
+           </div>
+         </div>
+       ))}
+@@ -149,9 +172,11 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
+             color:      gstEnabled ? "#fff" : "#888",
+           }}
+           onClick={() => {
+-            setGstEnabled(p => !p);
+-            if (gstEnabled) {
++            const nextEnabled = !gstEnabled;
++            setGstEnabled(nextEnabled);
++            if (!nextEnabled) {
+               update("gst_percent", 0);
++              update("gst_input", "");
+               update("gst_amount",  "0");
+             }
+           }}
+@@ -161,17 +186,29 @@ export function ReceiptFields({ content, update }: { content: any, update: (k: s
+       </div>
+ 
+       {gstEnabled && (
+-        <Field
+-          label="GST %"
+-          value={String(content.gst_percent ?? "")}
+-          onChange={v => update("gst_percent", v)}
+-        />
++        <>
++          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
++            <button 
++              style={{ ...gstToggleBtn, background: (content.gst_type || "percent") === "percent" ? "#111" : "#e0e0e0", color: (content.gst_type || "percent") === "percent" ? "#fff" : "#888" }} 
++              onClick={() => update("gst_type", "percent")}
++            >% Percent</button>
++            <button 
++              style={{ ...gstToggleBtn, background: content.gst_type === "amount" ? "#111" : "#e0e0e0", color: content.gst_type === "amount" ? "#fff" : "#888" }} 
++              onClick={() => update("gst_type", "amount")}
++            >Γé╣ Amount</button>
++          </div>
++          <Field
++            label={content.gst_type === "amount" ? "GST (Γé╣)" : "GST (%)"}
++            value={String(content.gst_input !== undefined ? content.gst_input : content.gst_percent || "")}
++            onChange={v => update("gst_input", v)}
++          />
++        </>
+       )}
+ 
+       <SectionLabel>Totals (auto-calculated)</SectionLabel>
+-      <Field label="Subtotal"   value={content.subtotal || ""}   onChange={(v) => update("subtotal", v)} />
+-      <Field label="GST Amount" value={content.gst_amount || ""} onChange={(v) => update("gst_amount", v)} />
+-      <Field label="Total"      value={content.total || ""}      onChange={(v) => update("total", v)} />
++      <Field label="Subtotal"   value={content.subtotal || ""}   disabled={true} />
++      <Field label="GST Amount" value={content.gst_amount || ""} disabled={true} />
++      <Field label="Total"      value={content.total || ""}      disabled={true} />
+ 
+       <SectionLabel>Status</SectionLabel>
+       <Field label="Payment status" value={content.payment_status} onChange={v => update("payment_status", v)} />
+@@ -194,17 +231,31 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
+       return parseFloat(String(val).replace(/[Γé╣,\s]/g, "")) || 0;
+     };
+     const subtotal   = (content.line_items || []).reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
+-    const gstPercent = gstEnabled ? (parseFloat(content.gst_percent) || 0) : 0;
+-    const gstAmt     = (subtotal * gstPercent) / 100;
++    
++    const gstType = content.gst_type || "percent";
++    const gstInput = parseAmt(content.gst_input !== undefined ? content.gst_input : content.gst_percent);
++    let gstAmt = 0;
++    let finalGstPercent = 0;
++
++    if (gstEnabled) {
++      if (gstType === "percent") {
++        finalGstPercent = gstInput;
++        gstAmt = (subtotal * gstInput) / 100;
++      } else {
++        gstAmt = gstInput;
++      }
++    }
++    
+     const total      = subtotal + gstAmt;
+ 
+     const fmt = (n: number) => n > 0 ? `Γé╣${n.toLocaleString("en-IN")}` : "0";
+ 
+     update("subtotal",   fmt(subtotal));
+-    update("gst_percent", gstEnabled ? gstPercent : 0);
+-    update("gst_amount", gstEnabled && gstPercent > 0 ? fmt(gstAmt) : "0");
++    update("gst_percent", finalGstPercent);
++    update("gst_display_val", gstType === "percent" ? `${finalGstPercent}%` : fmt(gstAmt));
++    update("gst_amount", gstEnabled && gstAmt > 0 ? fmt(gstAmt) : "0");
+     update("total",      fmt(total));
+-  }, [content.line_items, content.gst_percent, gstEnabled]);
++  }, [content.line_items, content.gst_input, content.gst_percent, content.gst_type, gstEnabled]);
+ 
+   const updatePara = (i: number, val: any) => {
+     const updated = [...(content.body_paragraphs || [])];
+@@ -264,17 +315,28 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
+           </div>
+           <Field label="Description" value={item.description} onChange={v => updateItem(i, "description", v)} />
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 6 }}>
+-            {["hours", "unit_price", "amount"].map(key => (
++            {(["hours", "unit_price"] as const).map(key => (
+               <div key={key} style={f.group}>
+                 <div style={f.label}>{key.replace("_", " ")}</div>
+                 <input style={f.input as React.CSSProperties} value={item[key] || ""} onChange={e => updateItem(i, key, e.target.value)} />
+               </div>
+             ))}
++            {/* Amount is auto-calculated from hours ├ù unit_price */}
++            <div style={f.group}>
++              <div style={f.label}>amount</div>
++              <input
++                style={{ ...f.input, background: "#f1f5f9", color: "#334155", fontWeight: 600, cursor: "not-allowed" } as React.CSSProperties}
++                value={item.amount || ""}
++                readOnly
++                tabIndex={-1}
++              />
++            </div>
+           </div>
+         </div>
+       ))}
+       <button style={f.addBtn} onClick={addItem}>+ Add line item</button>
+ 
++
+       <div style={gstToggleWrap}>
+         <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>Enable GST</span>
+         <button
+@@ -284,9 +346,11 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
+             color:      gstEnabled ? "#fff" : "#888",
+           }}
+           onClick={() => {
+-            setGstEnabled(p => !p);
+-            if (gstEnabled) {
++            const nextEnabled = !gstEnabled;
++            setGstEnabled(nextEnabled);
++            if (!nextEnabled) {
+               update("gst_percent", 0);
++              update("gst_input", "");
+               update("gst_amount",  "0");
+             }
+           }}
+@@ -296,17 +360,29 @@ export function ClientDocFields({ content, update }: { content: any, update: (k:
+       </div>
+ 
+       {gstEnabled && (
+-        <Field
+-          label="GST %"
+-          value={String(content.gst_percent || "")}
+-          onChange={v => update("gst_percent", v)}
+-        />
++        <>
++          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
++            <button 
++              style={{ ...gstToggleBtn, background: (content.gst_type || "percent") === "percent" ? "#111" : "#e0e0e0", color: (content.gst_type || "percent") === "percent" ? "#fff" : "#888" }} 
++              onClick={() => update("gst_type", "percent")}
++            >% Percent</button>
++            <button 
++              style={{ ...gstToggleBtn, background: content.gst_type === "amount" ? "#111" : "#e0e0e0", color: content.gst_type === "amount" ? "#fff" : "#888" }} 
++              onClick={() => update("gst_type", "amount")}
++            >Γé╣ Amount</button>
++          </div>
++          <Field
++            label={content.gst_type === "amount" ? "GST (Γé╣)" : "GST (%)"}
++            value={String(content.gst_input !== undefined ? content.gst_input : content.gst_percent || "")}
++            onChange={v => update("gst_input", v)}
++          />
++        </>
+       )}
+ 
+-      <SectionLabel>Totals</SectionLabel>
+-      <Field label="Subtotal"   value={content.subtotal}   onChange={v => update("subtotal", v)} />
+-      <Field label="GST amount" value={content.gst_amount} onChange={v => update("gst_amount", v)} />
+-      <Field label="Total"      value={content.total}      onChange={v => update("total", v)} />
++      <SectionLabel>Totals (auto-calculated)</SectionLabel>
++      <Field label="Subtotal"   value={content.subtotal}   disabled={true} />
++      <Field label="GST amount" value={content.gst_amount} disabled={true} />
++      <Field label="Total"      value={content.total}      disabled={true} />
+     </div>
+   );
+ }
+@@ -337,21 +413,53 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
+   useEffect(() => {
+     const parseAmt = (val: any) => {
+       if (!val) return 0;
+-      return parseFloat(String(val).replace(/[Γé╣,\s]/g, "")) || 0;
++      return parseFloat(String(val).replace(/[Γé╣,\s\-]/g, "")) || 0;
+     };
+ 
+-    const subtotal   = (content.line_items || []).reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
+-    const gstPercent = gstEnabled ? (parseFloat(content.gst_percent) || 0) : 0;
+-    const gstAmt     = (subtotal * gstPercent) / 100;
+-    const total      = subtotal + gstAmt;
++    // Calculation order: line items ΓåÆ subtotal ΓåÆ discount ΓåÆ taxable ΓåÆ GST ΓåÆ total
++    const lineSubtotal = (content.line_items || []).reduce((sum: number, item: any) => sum + parseAmt(item.amount), 0);
++    
++    // Discount Calculation
++    const discountInput = parseAmt(content.discount);
++    const discountType = content.discount_type || "amount"; // default amount
++    let discountAmt = 0;
++    if (discountType === "percent") {
++      discountAmt = (lineSubtotal * discountInput) / 100;
++    } else {
++      discountAmt = discountInput;
++    }
++    
++    const taxable = Math.max(0, lineSubtotal - discountAmt);
++    
++    // GST Calculation
++    const gstType = content.gst_type || "percent"; // default percent for backward compat
++    const gstInput = parseAmt(content.gst_input !== undefined ? content.gst_input : content.gst_percent);
++    let gstAmt = 0;
++    let finalGstPercent = 0;
++
++    if (gstEnabled) {
++      if (gstType === "percent") {
++        finalGstPercent = gstInput;
++        gstAmt = (taxable * gstInput) / 100;
++      } else {
++        gstAmt = gstInput;
++      }
++    }
+ 
++    const total = taxable + gstAmt;
+     const fmt = (n: number) => n > 0 ? `Γé╣${n.toLocaleString("en-IN")}` : "0";
+ 
+-    update("subtotal",   fmt(subtotal));
+-    update("gst_percent", gstEnabled ? gstPercent : 0);
+-    update("gst_amount", gstEnabled && gstPercent > 0 ? fmt(gstAmt) : "0");
++    update("subtotal",   fmt(lineSubtotal));
++    update("formatted_discount", discountAmt > 0 ? `-Γé╣${discountAmt.toLocaleString("en-IN")}` : "");
++    update("taxable_amount", discountAmt > 0 ? fmt(taxable) : "");
++    
++    // Values for the template
++    update("gst_percent", finalGstPercent);
++    update("gst_display_val", gstType === "percent" ? `${finalGstPercent}%` : fmt(gstAmt));
++    update("gst_amount", gstEnabled && gstAmt > 0 ? fmt(gstAmt) : "0");
++    
+     update("total",      fmt(total));
+-  }, [content.line_items, content.gst_percent, gstEnabled]);
++  }, [content.line_items, content.discount, content.discount_type, content.gst_input, content.gst_percent, content.gst_type, gstEnabled]);
+ 
+   const updateItem = (i: number, key: string, val: any) => {
+     const updated = [...(content.line_items || [])];
+@@ -399,17 +507,44 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
+           </div>
+           <Field label="Description" value={item.description} onChange={v => updateItem(i, "description", v)} />
+           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 6 }}>
+-            {["hours", "unit_price", "amount"].map(key => (
++            {(["hours", "unit_price"] as const).map(key => (
+               <div key={key} style={f.group}>
+                 <div style={f.label}>{key.replace("_", " ")}</div>
+                 <input style={f.input as React.CSSProperties} value={item[key] || ""} onChange={e => updateItem(i, key, e.target.value)} />
+               </div>
+             ))}
++            {/* Amount is auto-calculated from hours ├ù unit_price */}
++            <div style={f.group}>
++              <div style={f.label}>amount</div>
++              <input
++                style={{ ...f.input, background: "#f1f5f9", color: "#334155", fontWeight: 600, cursor: "not-allowed" } as React.CSSProperties}
++                value={item.amount || ""}
++                readOnly
++                tabIndex={-1}
++              />
++            </div>
+           </div>
+         </div>
+       ))}
+       <button style={f.addBtn} onClick={addItem}>+ Add line item</button>
+ 
++      <SectionLabel>Discount</SectionLabel>
++      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
++        <button 
++          style={{ ...gstToggleBtn, background: (content.discount_type || "amount") === "amount" ? "#111" : "#e0e0e0", color: (content.discount_type || "amount") === "amount" ? "#fff" : "#888" }} 
++          onClick={() => update("discount_type", "amount")}
++        >Γé╣ Amount</button>
++        <button 
++          style={{ ...gstToggleBtn, background: content.discount_type === "percent" ? "#111" : "#e0e0e0", color: content.discount_type === "percent" ? "#fff" : "#888" }} 
++          onClick={() => update("discount_type", "percent")}
++        >% Percent</button>
++      </div>
++      <Field
++        label={content.discount_type === "percent" ? "Discount (%)" : "Discount (Γé╣)"}
++        value={String(content.discount ?? "")}
++        onChange={v => update("discount", v)}
++      />
++
+       <div style={gstToggleWrap}>
+         <span style={{ fontSize: 11, fontWeight: 600, color: "#555" }}>Enable GST</span>
+         <button
+@@ -419,9 +554,11 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
+             color:      gstEnabled ? "#fff" : "#888",
+           }}
+           onClick={() => {
+-            setGstEnabled(p => !p);
+-            if (gstEnabled) {
++            const nextEnabled = !gstEnabled;
++            setGstEnabled(nextEnabled);
++            if (!nextEnabled) {
+               update("gst_percent", 0);
++              update("gst_input", "");
+               update("gst_amount",  "0");
+             }
+           }}
+@@ -431,19 +568,43 @@ export function InvoiceFields({ content, update }: { content: any, update: (k: s
+       </div>
+ 
+       {gstEnabled && (
+-        <Field
+-          label="GST %"
+-          value={String(content.gst_percent || "")}
+-          onChange={v => update("gst_percent", v)}
+-        />
++        <>
++          <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
++            <button 
++              style={{ ...gstToggleBtn, background: (content.gst_type || "percent") === "percent" ? "#111" : "#e0e0e0", color: (content.gst_type || "percent") === "percent" ? "#fff" : "#888" }} 
++              onClick={() => update("gst_type", "percent")}
++            >% Percent</button>
++            <button 
++              style={{ ...gstToggleBtn, background: content.gst_type === "amount" ? "#111" : "#e0e0e0", color: content.gst_type === "amount" ? "#fff" : "#888" }} 
++              onClick={() => update("gst_type", "amount")}
++            >Γé╣ Amount</button>
++          </div>
++          <Field
++            label={content.gst_type === "amount" ? "GST (Γé╣)" : "GST (%)"}
++            value={String(content.gst_input !== undefined ? content.gst_input : content.gst_percent || "")}
++            onChange={v => update("gst_input", v)}
++          />
++        </>
+       )}
+ 
+-      <SectionLabel>Totals</SectionLabel>
+-      <Field label="Subtotal" value={content.subtotal}   onChange={v => update("subtotal", v)} />
++      <SectionLabel>Totals (auto-calculated)</SectionLabel>
++      <Field label="Subtotal (before discount)" value={content.subtotal}                  disabled={true} />
++      {/* Show the computed discount amount, not the raw input value */}
++      {content.formatted_discount && (
++        <div style={f.group}>
++          <div style={f.label}>Discount applied</div>
++          <input
++            style={{ ...f.input, background: "#f1f5f9", color: "#c0392b", fontWeight: 700, cursor: "not-allowed" } as React.CSSProperties}
++            value={content.formatted_discount || ""}
++            readOnly
++            tabIndex={-1}
++          />
++        </div>
++      )}
+       {gstEnabled && (
+-        <Field label="GST amount" value={content.gst_amount} onChange={v => update("gst_amount", v)} />
++        <Field label="GST amount" value={content.gst_amount} disabled={true} />
+       )}
+-      <Field label="Total"    value={content.total}      onChange={v => update("total", v)} />
++      <Field label="Total"    value={content.total}      disabled={true} />
+ 
+       <SectionLabel>Payment & status</SectionLabel>
+       <Field label="Payment status" value={content.payment_status} onChange={v => update("payment_status", v)} />

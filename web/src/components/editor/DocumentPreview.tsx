@@ -17,14 +17,19 @@ interface DocumentPreviewProps {
   url: string;
   onDownload: () => void;
   previewKey?: number;
+  // Optional: when provided, live preview renders via POST without iframe reload
+  liveContent?: any;
+  templateType?: string;
+  docId?: string;
 }
 
-export function DocumentPreview({ url, onDownload, previewKey = 0 }: DocumentPreviewProps) {
+export function DocumentPreview({ url, onDownload, previewKey = 0, liveContent, templateType, docId }: DocumentPreviewProps) {
   const [zoom, setZoom] = useState(1);
   const [internalKey, setInternalKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [srcDoc, setSrcDoc] = useState<string | undefined>(undefined);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -35,9 +40,47 @@ export function DocumentPreview({ url, onDownload, previewKey = 0 }: DocumentPre
   const MAX_ZOOM = 3;
 
   useEffect(() => {
+    // If using live preview, ignore standard url/key updates so auto-saves don't trigger the loading spinner infinitely
+    if (liveContent !== undefined) return;
     setLoading(true);
     setError(false);
-  }, [url, previewKey, internalKey]);
+  }, [url, previewKey, internalKey, liveContent]);
+
+  // Live preview: when liveContent + docId are provided, POST to render immediately without iframe src reload
+  useEffect(() => {
+    if (!liveContent || !docId || !templateType) return;
+    
+    // Only show loading spinner on the very first live render
+    if (!srcDoc) setLoading(true);
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/doc/${docId}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: liveContent, template_type: templateType }),
+          signal: controller.signal,
+        });
+        if (res.ok) {
+          const html = await res.text();
+          setSrcDoc(html);
+          setLoading(false);
+          setError(false);
+        } else {
+          setLoading(false);
+          setError(true);
+        }
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          setLoading(false);
+          setError(true);
+        }
+      }
+    }, 120); // 120ms debounce — fast but avoids flooding on every keystroke
+    
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [liveContent, docId, templateType]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -212,15 +255,28 @@ export function DocumentPreview({ url, onDownload, previewKey = 0 }: DocumentPre
               visibility: loading ? "hidden" : "visible"
             }}
           >
-            <iframe
-              ref={iframeRef}
-              key={`preview-${previewKey}-${internalKey}`}
-              src={url}
-              style={s.iframe}
-              title="Document preview"
-              onLoad={handleIframeLoad}
-              onError={() => { setLoading(false); setError(true); }}
-            />
+            {srcDoc ? (
+              // Live preview — uses srcDoc to update in-place without iframe reload
+              <iframe
+                ref={iframeRef}
+                srcDoc={srcDoc}
+                style={s.iframe}
+                title="Document live preview"
+                onLoad={handleIframeLoad}
+                onError={() => { setLoading(false); setError(true); }}
+              />
+            ) : (
+              // Standard preview — loads from URL (version history, saved state)
+              <iframe
+                ref={iframeRef}
+                key={`preview-${previewKey}-${internalKey}`}
+                src={url}
+                style={s.iframe}
+                title="Document preview"
+                onLoad={handleIframeLoad}
+                onError={() => { setLoading(false); setError(true); }}
+              />
+            )}
           </div>
         )}
       </div>

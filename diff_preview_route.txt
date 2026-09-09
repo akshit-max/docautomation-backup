@@ -1,0 +1,81 @@
+﻿diff --git a/web/src/app/api/doc/[id]/preview/route.ts b/web/src/app/api/doc/[id]/preview/route.ts
+index de51a5b..22a0ea9 100644
+--- a/web/src/app/api/doc/[id]/preview/route.ts
++++ b/web/src/app/api/doc/[id]/preview/route.ts
+@@ -1,6 +1,7 @@
+ import { NextResponse } from 'next/server';
+ import { adminDb } from '@/lib/firebase-admin';
+ import { ActivityService } from '@/lib/services/activity/ActivityService';
++import { calculateTotals, calculateReceiptTotals } from '@/lib/documents';
+ import path from 'path';
+ import fs from 'fs';
+ 
+@@ -103,7 +104,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id:
+ 
+     if (fs.existsSync(templatePath)) {
+       const templateSource = fs.readFileSync(templatePath, 'utf-8');
+-      const content = data?.content || {};
++      let content = data?.content || {};
++      // Re-run calculations so display values are always correct regardless of
++      // whether the doc was extracted (raw numbers) or edited (formatted strings).
++      if (safeTemplateType === 'invoice' || safeTemplateType === 'client_doc') {
++        content = calculateTotals({ ...content });
++      } else if (safeTemplateType === 'receipt_template') {
++        content = calculateReceiptTotals({ ...content });
++      }
+       html = renderTemplate(templateSource, { ...content, template_type: safeTemplateType });
+     } else {
+       // Fallback: render a clean, modern UI for missing templates
+@@ -247,3 +255,52 @@ export async function GET(request: Request, { params }: { params: Promise<{ id:
+     });
+   }
+ }
++
++// POST /api/doc/[id]/preview ΓÇö renders HTML from raw content body (used for live preview without saving)
++export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
++  try {
++    const { id } = await params;
++    const body = await request.json();
++    const content = body.content || {};
++    const templateType = body.template_type || 'developer_doc';
++
++    const ALLOWED_TEMPLATE_TYPES = ['invoice', 'receipt_template', 'client_doc', 'compliance', 'timeline', 'developer_doc'];
++    const safeTemplateType = ALLOWED_TEMPLATE_TYPES.includes(templateType) ? templateType : 'developer_doc';
++
++    const templatePath = path.join(
++      process.cwd(),
++      '..',
++      'backend',
++      'templates',
++      safeTemplateType,
++      'layout.html'
++    );
++
++    let html: string;
++    if (fs.existsSync(templatePath)) {
++      const templateSource = fs.readFileSync(templatePath, 'utf-8');
++      // Re-run calculations on the live content to ensure correct display values
++      // (amounts, subtotal, discount, gst, total) regardless of how they were stored.
++      let computedContent = { ...content };
++      if (safeTemplateType === 'invoice' || safeTemplateType === 'client_doc') {
++        computedContent = calculateTotals(computedContent);
++      } else if (safeTemplateType === 'receipt_template') {
++        computedContent = calculateReceiptTotals(computedContent);
++      }
++      html = renderTemplate(templateSource, { ...computedContent, template_type: safeTemplateType });
++    } else {
++      html = `<!DOCTYPE html><html><body><pre>${JSON.stringify(content, null, 2)}</pre></body></html>`;
++    }
++
++    return new NextResponse(html, {
++      status: 200,
++      headers: { 'Content-Type': 'text/html; charset=utf-8' },
++    });
++  } catch (error) {
++    console.error('Error rendering live preview:', error);
++    return new NextResponse('<h1>Preview failed</h1>', {
++      status: 500,
++      headers: { 'Content-Type': 'text/html' },
++    });
++  }
++}

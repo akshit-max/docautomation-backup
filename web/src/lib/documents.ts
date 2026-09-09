@@ -87,13 +87,13 @@ export const SCHEMAS: Record<string, any> = {
         },
         "user_flows": ["specific flow 1 based on input", "specific flow 2"],
         "api_endpoints": [
-            {"method": "GET", "path": "/endpoint", "description": "string"}
+            { "method": "GET", "path": "/endpoint", "description": "string" }
         ],
         "timeline": [
-            {"phase": "Phase name", "duration": "X weeks", "deliverables": ["specific deliverable"]}
+            { "phase": "Phase name", "duration": "X weeks", "deliverables": ["specific deliverable"] }
         ],
         "assumptions": ["assumption based on input"],
-        "risks": [{"risk": "specific risk", "mitigation": "specific mitigation"}]
+        "risks": [{ "risk": "specific risk", "mitigation": "specific mitigation" }]
     },
     "client_doc": {
         "client_name": "string — full name from input",
@@ -109,7 +109,8 @@ export const SCHEMAS: Record<string, any> = {
         ],
         "quotation_number": "QT-2026-001",
         "project_name": "PROJECT NAME IN CAPS",
-        "gst_percent": 18,
+        "discount": 0,
+        "gst_percent": 0,
         "line_items": [
             {
                 "description": "SERVICE DESCRIPTION IN CAPS — specific to the project",
@@ -131,13 +132,16 @@ export const SCHEMAS: Record<string, any> = {
         "invoice_number": "INV-2025-001",
         "project_name": "PROJECT NAME IN CAPS",
         "client_name": "string",
+        "client_email": "string",
+        "client_address": "string",
         "client_phone": "string",
         "upi_phone": "string",
         "upi_id": "string",
         "date": "DD/MM/YYYY",
         "due_date": "DD/MM/YYYY",
         "payment_status": "UNPAID",
-        "gst_percent": 18,
+        "discount": 0,
+        "gst_percent": 0,
         "line_items": [
             {
                 "description": "SERVICE DESCRIPTION IN CAPS",
@@ -166,13 +170,13 @@ export const SCHEMAS: Record<string, any> = {
     }
 };
 
-const safeFloat = (val: any, defaultVal = 0.0): number => {
+export const safeFloat = (val: any, defaultVal = 0.0): number => {
     if (val == null) return defaultVal;
     if (typeof val === 'number') return val;
-    
+
     const s = String(val).replace(/₹/g, '').replace(/,/g, '').trim();
     if (!s || s === '-') return defaultVal;
-    
+
     const num = parseFloat(s);
     return isNaN(num) ? defaultVal : num;
 };
@@ -180,22 +184,42 @@ const formatCurrency = (amount: number): string => {
     return `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 };
 
+/**
+ * calculateTotals — single authoritative calculation for invoice and client_doc.
+ *
+ * Pipeline:
+ *   line items → subtotal → discount → taxable → GST → total
+ *
+ * Handles:
+ *  - discount_type: "amount" (flat ₹) | "percent" (% of subtotal)
+ *  - gst_type:      "percent" (% of taxable) | "amount" (flat ₹)
+ *  - Falls back to legacy gst_percent field for backward compat.
+ *
+ * This function is called:
+ *  1. During AI extraction (generate/route.ts) — seeds initial stored values
+ *  2. During live preview rendering (preview/route.ts reads stored values)
+ *  The EditorForms.tsx useEffect mirrors this logic on the frontend for live editing.
+ */
 export const calculateTotals = (content: any): any => {
     const lineItems = content.line_items || [];
     let subtotal = 0;
 
+    // ── 1. Line Items → Subtotal ──────────────────────────────────────────
     if (lineItems.length > 0) {
         for (const item of lineItems) {
             const hours = safeFloat(item.hours);
             const unitPrice = safeFloat(item.unit_price);
             const calculatedAmount = hours * unitPrice;
-            
-            // If hours/unitPrice are 0 but an amount was provided by the AI, respect it
+
+            // If hours×unitPrice gives a result, use it. Otherwise fall back
+            // to an explicitly provided amount (e.g. AI gave a flat amount).
             const existingAmount = safeFloat(item.amount);
-            const amount = (calculatedAmount > 0) ? calculatedAmount : (existingAmount > 0 ? existingAmount : 0);
-            
-            // If we used a flat amount and hours/unit_price are missing, we can optionally reverse engineer unit_price
-            // so it displays nicely in the template, e.g. 1 unit of <amount>
+            const amount = calculatedAmount > 0
+                ? calculatedAmount
+                : existingAmount > 0 ? existingAmount : 0;
+
+            // Normalise: if only a flat amount exists, represent as 1 × amount
+            // so the invoice table shows meaningful numbers.
             if (amount > 0 && calculatedAmount === 0) {
                 item.hours = 1;
                 item.unit_price = amount;
@@ -210,63 +234,146 @@ export const calculateTotals = (content: any): any => {
         subtotal = safeFloat(content.subtotal);
     }
 
-    // Use 0 as default so zero-GST invoices are not incorrectly taxed.
-    // The user must explicitly set gst_percent > 0 to apply tax.
-    const gstPercent = safeFloat(content.gst_percent, 0);
-    const gstAmount  = gstPercent > 0 ? subtotal * (gstPercent / 100) : 0;
-    const total      = subtotal + gstAmount;
+    // ── 2. Discount → Taxable Amount ─────────────────────────────────────
+    // discount_type defaults to "amount" (flat ₹) for backward compatibility.
+    // When type is "percent", the discount value is treated as a percentage of subtotal.
+    const discountType = content.discount_type || 'amount';
+    const discountInput = safeFloat(content.discount, 0);
+    let discountAmt = 0;
 
-    content.subtotal = subtotal;
-    content.gst_percent = gstPercent;
-    content.gst_amount = gstAmount;
-    content.total = total;
+    if (discountInput > 0) {
+        discountAmt = discountType === 'percent'
+            ? (subtotal * discountInput) / 100
+            : discountInput;
+        // Clamp — discount cannot exceed subtotal
+        discountAmt = Math.min(discountAmt, subtotal);
+    }
 
+    const taxable = subtotal - discountAmt;
+
+    // ── 3. GST → Total ───────────────────────────────────────────────────
+    // gst_type defaults to "percent" for backward compatibility.
+    // Support both gst_input (new dual-mode field) and gst_percent (legacy).
+    const gstType = content.gst_type || 'percent';
+    const gstInput = safeFloat(
+        content.gst_input !== undefined ? content.gst_input : content.gst_percent,
+        0
+    );
+    let gstAmt = 0;
+    let finalGstPercent = 0;
+
+    if (gstInput > 0) {
+        if (gstType === 'percent') {
+            finalGstPercent = gstInput;
+            gstAmt = (taxable * gstInput) / 100;
+        } else {
+            // Flat GST amount
+            gstAmt = gstInput;
+        }
+    }
+
+    const total = taxable + gstAmt;
+
+    // ── 4. Write back ─────────────────────────────────────────────────────
+    // NOTE: subtotal, gst_amount, total are stored as FORMATTED STRINGS (₹X,XXX)
+    // because the invoice template uses {{ subtotal }}, {{ total }}, {{ gst_amount }}
+    // directly as display text without adding ₹ itself.
+    content.subtotal = subtotal > 0 ? formatCurrency(subtotal) : '0';
+    content.gst_percent = finalGstPercent;   // keep raw number for legacy template var
+    content.gst_amount = gstAmt > 0 ? formatCurrency(gstAmt) : '0';
+    content.total = total > 0 ? formatCurrency(total) : '0';
+
+    // Raw numeric values for code that needs arithmetic
+    content.subtotal_num = subtotal;
+    content.gst_amount_num = gstAmt;
+    content.total_num = total;
+
+    // Display aliases (same as primary now, kept for backward compat)
     content.subtotal_display = formatCurrency(subtotal);
-    content.gst_amount_display = formatCurrency(gstAmount);
+    content.gst_amount_display = formatCurrency(gstAmt);
     content.total_display = formatCurrency(total);
+
+    // Discount display strings used by invoice template
+    content.formatted_discount = discountAmt > 0 ? `-₹${discountAmt.toLocaleString('en-IN')}` : '';
+    content.taxable_amount = discountAmt > 0 ? formatCurrency(taxable) : '';
+    content.gst_display_val = gstType === 'percent'
+        ? `${finalGstPercent}%`
+        : formatCurrency(gstAmt);
 
     return content;
 };
 
+/**
+ * calculateReceiptTotals — single authoritative calculation for receipt_template.
+ *
+ * Pipeline:
+ *   line items (or amount_received) → base → GST → total
+ *
+ * Handles:
+ *  - gst_type: "percent" | "amount"
+ *  - Falls back to legacy gst_percent field for backward compat.
+ */
 export const calculateReceiptTotals = (content: any): any => {
     const lineItems = content.line_items || [];
     let baseAmount = 0.0;
 
+    // ── 1. Line Items → Base Amount ───────────────────────────────────────
     if (lineItems.length > 0) {
         for (const item of lineItems) {
             const hours = safeFloat(item.hours);
             const unitPrice = safeFloat(item.unit_price);
             const existingAmount = safeFloat(item.amount);
-            
-            const amount = (hours > 0 && unitPrice > 0) ? hours * unitPrice : existingAmount;
+            const amount = (hours > 0 && unitPrice > 0)
+                ? hours * unitPrice
+                : existingAmount;
             item.amount = amount;
             baseAmount += amount;
         }
     }
 
-    if (baseAmount <= 0) {
-        baseAmount = safeFloat(content.amount_received);
-    }
-    
-    if (baseAmount <= 0) {
-        baseAmount = safeFloat(content.subtotal);
+    // Fall back to explicit amount_received, then subtotal
+    if (baseAmount <= 0) baseAmount = safeFloat(content.amount_received);
+    if (baseAmount <= 0) baseAmount = safeFloat(content.subtotal);
+
+    // ── 2. GST → Total ───────────────────────────────────────────────────
+    const gstType = content.gst_type || 'percent';
+    const gstInput = safeFloat(
+        content.gst_input !== undefined ? content.gst_input : content.gst_percent,
+        0
+    );
+    let gstAmt = 0;
+    let finalGstPercent = 0;
+
+    if (gstInput > 0) {
+        if (gstType === 'percent') {
+            finalGstPercent = gstInput;
+            gstAmt = (baseAmount * gstInput) / 100;
+        } else {
+            gstAmt = gstInput;
+        }
     }
 
-    const gstPercent = safeFloat(content.gst_percent, 0);
-    const gstAmount  = gstPercent > 0 ? baseAmount * (gstPercent / 100) : 0;
-    const total      = baseAmount + gstAmount;
+    const total = baseAmount + gstAmt;
 
-    // Only set amount_received from line items if it wasn't already set by the user
+    // ── 3. Write back ─────────────────────────────────────────────────────
+    // Only set amount_received from line items if it wasn't explicitly provided
     if (lineItems.length > 0 && !safeFloat(content.amount_received)) {
         content.amount_received = baseAmount;
     } else if (!content.amount_received) {
         content.amount_received = baseAmount;
     }
-    content.gst_amount = gstAmount;
-    content.total = total;
+
+    // Store as formatted strings (receipt template uses these directly for display)
+    content.subtotal = baseAmount > 0 ? formatCurrency(baseAmount) : '0';
+    content.gst_percent = finalGstPercent;
+    content.gst_amount = gstAmt > 0 ? formatCurrency(gstAmt) : '0';
+    content.total = total > 0 ? formatCurrency(total) : '0';
+    content.gst_display_val = gstType === 'percent'
+        ? `${finalGstPercent}%`
+        : formatCurrency(gstAmt);
 
     content.amount_received_display = formatCurrency(baseAmount);
-    content.gst_amount_display = formatCurrency(gstAmount);
+    content.gst_amount_display = formatCurrency(gstAmt);
     content.total_display = formatCurrency(total);
 
     return content;

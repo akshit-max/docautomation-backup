@@ -23,7 +23,7 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
           setBatch(res.data.batch);
           setTasks(res.data.tasks);
         }
-        
+
         // Stop polling if complete or cancelled
         if (res.data.batch.status === 'completed' || res.data.batch.status === 'cancelled') {
           active = false;
@@ -83,7 +83,7 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
   }
 
   const { totalDocuments, completed, failed, processing, pending, estimatedRemainingSeconds, status } = batch;
-  
+
   // Progress calculation
   const totalProcessed = completed + failed;
   const progressPercent = Math.min(100, Math.round((totalProcessed / totalDocuments) * 100)) || 0;
@@ -99,7 +99,7 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
       <div style={s.header}>
         <div style={s.logo}>
           <img src="/logo.png" alt="makewithus" style={{ width: 22, height: 22, objectFit: "contain" }} />
-          <span style={s.logoText}>makewithus / batch process</span>
+          <span style={s.logoText} className="hdr-logo-text">makewithus / batch process</span>
         </div>
         <div>
           <Link href="/documents" style={s.btnOutline}>View all documents</Link>
@@ -129,15 +129,15 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
           <div style={s.statsGrid}>
             <div style={s.statBox}>
               <span style={s.statLabel}>Completed</span>
-              <span style={{...s.statValue, color: '#27ae60'}}>{completed}</span>
+              <span style={{ ...s.statValue, color: '#27ae60' }}>{completed}</span>
             </div>
             <div style={s.statBox}>
               <span style={s.statLabel}>Failed</span>
-              <span style={{...s.statValue, color: failed > 0 ? '#e74c3c' : '#111'}}>{failed}</span>
+              <span style={{ ...s.statValue, color: failed > 0 ? '#e74c3c' : '#111' }}>{failed}</span>
             </div>
             <div style={s.statBox}>
               <span style={s.statLabel}>Processing</span>
-              <span style={{...s.statValue, color: '#f39c12'}}>{processing}</span>
+              <span style={{ ...s.statValue, color: '#f39c12' }}>{processing}</span>
             </div>
             <div style={s.statBox}>
               <span style={s.statLabel}>Pending</span>
@@ -156,14 +156,14 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
         {/* Task List */}
         <div style={{ marginTop: 32 }}>
           <h2 style={{ fontSize: 18, marginBottom: 16 }}>Document Queue</h2>
-          
+
           <div style={s.table}>
             <div style={s.tableHeader}>
               <div style={{ flex: 2 }}>Filename</div>
               <div style={{ flex: 1 }}>Status</div>
               <div style={{ flex: 1, textAlign: 'right' }}>Actions</div>
             </div>
-            
+
             {tasks.map((task) => (
               <div key={task.id} style={s.tableRow}>
                 <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
@@ -172,16 +172,16 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
                     {task.originalFilename}
                   </span>
                 </div>
-                
+
                 <div style={{ flex: 1 }}>
-                  {task.status === 'COMPLETED' && <span style={s.badgeSuccess}><CheckCircle2 size={12}/> Completed</span>}
-                  {task.status === 'FAILED' && <span style={s.badgeDanger}><XCircle size={12}/> Failed</span>}
+                  {task.status === 'COMPLETED' && <span style={s.badgeSuccess}><CheckCircle2 size={12} /> Completed</span>}
+                  {task.status === 'FAILED' && <span style={s.badgeDanger}><XCircle size={12} /> Failed</span>}
                   {task.status === 'PENDING' && <span style={s.badgeMuted}>Pending...</span>}
                   {['DOWNLOADING', 'OCR', 'AI', 'SAVING', 'VERSIONING'].includes(task.status) && (
-                    <span style={s.badgeWarning}><Loader2 size={12} style={s.spin}/> {task.status}</span>
+                    <span style={s.badgeWarning}><Loader2 size={12} style={s.spin} /> {task.status}</span>
                   )}
                 </div>
-                
+
                 <div style={{ flex: 1, textAlign: 'right' }}>
                   {task.status === 'COMPLETED' && task.finalDocumentId && (
                     <Link href={`/doc/${task.finalDocumentId}`} style={s.linkText} target="_blank">
@@ -196,7 +196,7 @@ export default function BatchDashboard({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
             ))}
-            
+
             {tasks.length === 0 && (
               <div style={{ padding: 32, textAlign: 'center', color: '#888', fontSize: 14 }}>
                 No tasks found for this batch.

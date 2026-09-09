@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { 
-  Upload, 
-  Pencil, 
-  History, 
-  RotateCcw, 
-  Languages, 
-  Sparkles, 
-  MessageSquare, 
-  Download, 
-  Bell, 
+import {
+  Upload,
+  Pencil,
+  History,
+  RotateCcw,
+  Languages,
+  Sparkles,
+  MessageSquare,
+  Download,
+  Bell,
   ArrowRight,
   FileText,
   Tag,
@@ -191,12 +191,13 @@ export function ActivityBell() {
 
   return (
     <div style={{ position: 'relative' }} ref={ref}>
-      <button 
-        style={s.bellBtn}
+      <button
+        className="hdr-btn-bell"
         onClick={() => setOpen(!open)}
         aria-label="Activity Center"
+        title="Activity Center"
       >
-        <Bell size={18} />
+        <Bell size={16} />
         {unread && <div style={s.unreadDot} />}
       </button>
 
@@ -219,7 +220,7 @@ export function ActivityBell() {
               ))}
             </div>
           </div>
-          
+
           <div style={s.activityList}>
             {loading ? (
               /* Skeleton Loader */
@@ -255,20 +256,20 @@ export function ActivityBell() {
                         {act.type === 'STATUS_CHANGED' && act.metadata?.oldStatus && act.metadata?.newStatus
                           ? `${act.metadata.oldStatus} → ${act.metadata.newStatus}`
                           : act.type === 'TAG_ADDED' && act.metadata?.tag
-                          ? `Added tag '${act.metadata.tag}'`
-                          : act.type === 'TAG_REMOVED' && act.metadata?.tag
-                          ? `Removed tag '${act.metadata.tag}'`
-                          : (act.title || 'Untitled Document')}
+                            ? `Added tag '${act.metadata.tag}'`
+                            : act.type === 'TAG_REMOVED' && act.metadata?.tag
+                              ? `Removed tag '${act.metadata.tag}'`
+                              : (act.title || 'Untitled Document')}
                       </div>
                     </div>
                     <div style={s.timeBadge} title={formatTooltipTime(act.createdAt)}>
                       {formatRelativeTime(act.createdAt)}
                     </div>
                   </div>
-                  
+
                   <div style={s.cardFooter}>
-                    <Link 
-                      href={getTargetUrl(act)} 
+                    <Link
+                      href={getTargetUrl(act)}
                       style={s.openLink}
                       onClick={() => setOpen(false)}
                     >
@@ -283,8 +284,8 @@ export function ActivityBell() {
             {/* Pagination Load More */}
             {hasMore && !loading && (
               <div style={s.loadMoreContainer}>
-                <button 
-                  style={s.loadMoreBtn} 
+                <button
+                  style={s.loadMoreBtn}
                   disabled={loadingMore}
                   onClick={() => fetchActivities(category, nextCursor, true)}
                 >
@@ -293,7 +294,7 @@ export function ActivityBell() {
               </div>
             )}
           </div>
-          
+
           <div style={s.dropdownFooter}>
             <span>Enterprise Audit Trail</span>
           </div>
